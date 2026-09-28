@@ -1,0 +1,25 @@
+{
+  "pages": [
+    { "path": "pages/index/index", "style": { "navigationBarTitleText": "校园失物招领" } },
+    { "path": "pages/login/login", "style": { "navigationBarTitleText": "登录" } },
+    { "path": "pages/detail/detail", "style": { "navigationBarTitleText": "详情" } },
+    { "path": "pages/publish/publish", "style": { "navigationBarTitleText": "发布" } },
+    { "path": "pages/claim/detail", "style": { "navigationBarTitleText": "申请详情" } },
+    { "path": "pages/mine/mine", "style": { "navigationBarTitleText": "我的" } }
+  ],
+  "tabBar": {
+    "color": "#909399",
+    "selectedColor": "#2b6cb0",
+    "backgroundColor": "#ffffff",
+    "list": [
+      { "pagePath": "pages/index/index", "text": "首页" },
+      { "pagePath": "pages/mine/mine", "text": "我的" }
+    ]
+  },
+  "globalStyle": {
+    "navigationBarTextStyle": "black",
+    "navigationBarTitleText": "校园失物招领",
+    "navigationBarBackgroundColor": "#FFFFFF",
+    "backgroundColor": "#F5F6F8"
+  }
+}

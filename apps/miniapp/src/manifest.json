@@ -1,0 +1,15 @@
+{
+  "name": "校园失物招领",
+  "appid": "",
+  "description": "校园失物招领系统 学生端",
+  "versionName": "0.1.0",
+  "versionCode": "100",
+  "vueVersion": "3",
+  "mp-weixin": {
+    "appid": "wx7c29e056e8b06f1a",
+    "setting": {
+      "urlCheck": false
+    },
+    "usingComponents": true
+  }
+}

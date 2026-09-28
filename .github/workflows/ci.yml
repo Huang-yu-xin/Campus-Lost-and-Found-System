@@ -1,0 +1,79 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop, "feature/**" ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  server:
+    name: Server (Spring Boot) - build & test
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: campus_lost_found_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost"
+          --health-interval=10s --health-timeout=5s --health-retries=10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+      - name: Build & test (incl. DB integration tests)
+        working-directory: server
+        env:
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_NAME: campus_lost_found_test
+          DB_USERNAME: root
+          DB_PASSWORD: root
+          SPRING_PROFILES_ACTIVE: ci
+          CLF_IT: "true"     # 启用 @EnabledIfEnvironmentVariable 的真实 DB 集成/并发测试
+        run: mvn -B -ntp verify
+
+  admin-web:
+    name: Admin Web (Vue3) - lint & build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: apps/admin-web/package-lock.json
+      - name: Install
+        working-directory: apps/admin-web
+        run: npm ci
+      - name: Lint
+        working-directory: apps/admin-web
+        run: npm run lint --if-present
+      - name: Build
+        working-directory: apps/admin-web
+        run: npm run build
+
+  miniapp:
+    name: Miniapp (uni-app) - build check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: apps/miniapp/package-lock.json
+      - name: Install
+        working-directory: apps/miniapp
+        run: npm ci
+      - name: Build mp-weixin
+        working-directory: apps/miniapp
+        run: npm run build:mp-weixin

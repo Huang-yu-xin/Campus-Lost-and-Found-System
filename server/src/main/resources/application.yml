@@ -1,0 +1,60 @@
+spring:
+  application:
+    name: campus-lost-found-server
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+  datasource:
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:campus_lost_found}?useUnicode=true&characterEncoding=utf8&serverTimezone=UTC&useSSL=false&allowPublicKeyRetrieval=true
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+  jackson:
+    time-zone: UTC
+    serialization:
+      write-dates-as-timestamps: false
+
+# API 前缀 /api/v1
+server:
+  port: ${SERVER_PORT:8080}
+  servlet:
+    context-path: /api/v1
+
+mybatis:
+  mapper-locations: classpath:mapper/**/*.xml
+  type-aliases-package: edu.whut.clf
+  configuration:
+    map-underscore-to-camel-case: true
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui/index.html
+  api-docs:
+    path: /v3/api-docs
+
+# 应用级配置（默认值见 deploy/env.example；真实机密放 application-local.yml）
+app:
+  auth:
+    access-token-ttl-minutes: ${ACCESS_TOKEN_TTL_MINUTES:120}
+    refresh-token-ttl-days: ${REFRESH_TOKEN_TTL_DAYS:7}
+    jwt-secret: ${JWT_SECRET:dev-only-secret-change-me}
+  mock-login:
+    enabled: ${MOCK_LOGIN_ENABLED:false}
+  campus-identity:
+    provider: ${CAMPUS_IDENTITY_PROVIDER:disabled}
+  wechat:
+    appid: ${WECHAT_APPID:}
+    appsecret: ${WECHAT_APPSECRET:}
+  file:
+    storage-root: ${FILE_STORAGE_ROOT:./storage}
+    max-size-mb: ${FILE_MAX_SIZE_MB:5}
+    max-count-per-post: ${FILE_MAX_COUNT_PER_POST:6}
+    allowed-mime: ${FILE_ALLOWED_MIME:image/jpeg,image/png,image/webp}
+
+logging:
+  level:
+    root: INFO
+    edu.whut.clf: DEBUG

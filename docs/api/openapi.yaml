@@ -1,0 +1,455 @@
+openapi: 3.0.3
+info:
+  title: 校园失物招领系统 API
+  version: 0.1.0
+  description: >
+    P1 基线契约。权威版本由后端 springdoc 运行期生成（/api/v1/v3/api-docs）。
+    统一响应/错误码见 docs/api/conventions.md。私密对象无权限统一返回 404。
+servers:
+  - url: /api/v1
+    description: 统一前缀
+tags:
+  - name: M1-Auth
+  - name: M1-User
+  - name: M3-Post
+  - name: M3-File
+  - name: M4-Search
+  - name: M5-Claim
+  - name: M6-Message
+  - name: M6-Lead
+  - name: M6-Dispute
+  - name: M2-Admin
+security:
+  - bearerAuth: []
+paths:
+  /health:
+    get:
+      tags: [M1-Auth]
+      summary: 健康检查
+      security: []
+      responses:
+        '200': { description: OK }
+
+  # ---------------- M1 身份 ----------------
+  /auth/wechat/login:
+    post:
+      tags: [M1-Auth]
+      summary: 微信登录（FR-AUTH-01）
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                code: { type: string, description: 小程序临时登录凭证 }
+      responses:
+        '200': { description: 返回系统会话 }
+  /auth/mock/login:
+    post:
+      tags: [M1-Auth]
+      summary: 受限测试登录（FR-AUTH-02，生产禁用）
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                testUser: { type: string, example: userA }
+      responses:
+        '200': { description: 返回测试会话 }
+        '403': { description: MOCK_LOGIN_DISABLED }
+  /admin/auth/login:
+    post:
+      tags: [M2-Admin]
+      summary: 管理员登录（FR-AUTH-03）
+      security: []
+      responses: { '200': { description: OK } }
+  /auth/logout:
+    post:
+      tags: [M1-Auth]
+      summary: 退出（FR-AUTH-04）
+      responses: { '200': { description: OK } }
+  /auth/refresh:
+    post:
+      tags: [M1-Auth]
+      summary: 刷新令牌（若启用）
+      security: []
+      responses: { '200': { description: OK } }
+  /auth/campus/capabilities:
+    get:
+      tags: [M1-Auth]
+      summary: 校园认证能力（FR-AUTH-05，本期 disabled）
+      security: []
+      responses:
+        '200':
+          description: 能力状态
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          provider: { type: string, example: disabled }
+                          verificationEnabled: { type: boolean, example: false }
+  /users/me:
+    get:
+      tags: [M1-User]
+      summary: 获取本人资料（FR-USER-01/02）
+      responses: { '200': { description: OK } }
+    patch:
+      tags: [M1-User]
+      summary: 修改本人资料
+      responses: { '200': { description: OK } }
+  /users/me/posts:
+    get:
+      tags: [M3-Post]
+      summary: 我的发布（FR-POST-04）
+      responses: { '200': { description: 分页列表 } }
+  /users/me/claims:
+    get:
+      tags: [M5-Claim]
+      summary: 我的申请（FR-CLAIM-02）
+      responses: { '200': { description: 分页列表 } }
+  /users/me/leads:
+    get:
+      tags: [M6-Lead]
+      summary: 我提交的线索（FR-LEAD-02）
+      responses: { '200': { description: 分页列表 } }
+
+  # ---------------- M3 文件与发布 ----------------
+  /files:
+    post:
+      tags: [M3-File]
+      summary: 上传文件（FR-FILE-01）
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file: { type: string, format: binary }
+                purpose:
+                  type: string
+                  enum: [PUBLIC_POST, PRIVATE_CLAIM, PRIVATE_DISPUTE, PRIVATE_LEAD]
+      responses:
+        '201': { description: 返回 fileId }
+        '413': { description: FILE_TOO_LARGE }
+        '415': { description: UNSUPPORTED_MEDIA_TYPE }
+  /files/{fileId}:
+    get:
+      tags: [M3-File]
+      summary: 按用途鉴权下载
+      parameters:
+        - { name: fileId, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: 文件流 }
+        '404': { description: 不存在或无权限 }
+  /posts:
+    get:
+      tags: [M3-Post]
+      summary: 公开列表（FR-POST-03）
+      security: []
+      parameters:
+        - { name: page, in: query, schema: { type: integer, default: 1 } }
+        - { name: pageSize, in: query, schema: { type: integer, default: 20 } }
+        - { name: type, in: query, schema: { type: string, enum: [LOST, FOUND] } }
+        - { name: category, in: query, schema: { type: string } }
+        - { name: campus, in: query, schema: { type: string } }
+      responses: { '200': { description: 分页公开列表 } }
+    post:
+      tags: [M3-Post]
+      summary: 发布寻物/招领（FR-POST-01/02）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PostCreate' }
+      responses:
+        '201': { description: 创建成功 }
+        '400': { description: INVALID_ARGUMENT }
+  /posts/search:
+    get:
+      tags: [M4-Search]
+      summary: 组合筛选（FR-SEARCH-01）
+      security: []
+      parameters:
+        - { name: keyword, in: query, schema: { type: string } }
+        - { name: type, in: query, schema: { type: string, enum: [LOST, FOUND] } }
+        - { name: category, in: query, schema: { type: string } }
+        - { name: campus, in: query, schema: { type: string } }
+        - { name: eventFrom, in: query, schema: { type: string, format: date-time } }
+        - { name: eventTo, in: query, schema: { type: string, format: date-time } }
+        - { name: page, in: query, schema: { type: integer } }
+        - { name: pageSize, in: query, schema: { type: integer } }
+        - { name: sort, in: query, schema: { type: string, description: 白名单字段 } }
+      responses: { '200': { description: 分页结果 } }
+  /posts/{postId}:
+    get:
+      tags: [M3-Post]
+      summary: 详情（FR-POST-03）
+      security: []
+      parameters: [ { name: postId, in: path, required: true, schema: { type: string } } ]
+      responses: { '200': { description: OK }, '404': { description: NOT_FOUND } }
+    patch:
+      tags: [M3-Post]
+      summary: 本人编辑（FR-POST-04，核心字段可能被锁）
+      parameters: [ { name: postId, in: path, required: true, schema: { type: string } } ]
+      responses: { '200': { description: OK }, '409': { description: POST_EDIT_LOCKED } }
+  /posts/{postId}/withdraw:
+    post:
+      tags: [M3-Post]
+      summary: 受控撤回（FR-POST-05）
+      parameters: [ { name: postId, in: path, required: true, schema: { type: string } } ]
+      responses: { '200': { description: OK }, '409': { description: 冲突 } }
+  /posts/{postId}/mark-found:
+    post:
+      tags: [M3-Post]
+      summary: LOST 标记已找回（FR-POST-05）
+      parameters: [ { name: postId, in: path, required: true, schema: { type: string } } ]
+      responses: { '200': { description: OK } }
+  /posts/{postId}/matches:
+    get:
+      tags: [M4-Search]
+      summary: 双向候选匹配与原因（FR-MATCH-01/02）
+      parameters: [ { name: postId, in: path, required: true, schema: { type: string } } ]
+      responses:
+        '200':
+          description: 候选+分数+命中规则
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/MatchCandidate' }
+
+  # ---------------- M5 认领与交接 ----------------
+  /posts/{postId}/claims:
+    get:
+      tags: [M5-Claim]
+      summary: 发布者查看收到的申请（FR-CLAIM-02）
+      parameters: [ { name: postId, in: path, required: true, schema: { type: string } } ]
+      responses: { '200': { description: 列表 } }
+    post:
+      tags: [M5-Claim]
+      summary: 对 FOUND 发起认领（FR-CLAIM-01）
+      parameters:
+        - { name: postId, in: path, required: true, schema: { type: string } }
+        - { name: Idempotency-Key, in: header, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ClaimCreate' }
+      responses:
+        '201': { description: 创建成功 }
+        '403': { description: SELF_CLAIM_FORBIDDEN }
+        '409': { description: POST_NOT_CLAIMABLE / ACTIVE_CLAIM_EXISTS }
+  /claims/{claimId}:
+    get:
+      tags: [M5-Claim]
+      summary: 查看申请（本人/发布者）
+      parameters: [ { name: claimId, in: path, required: true, schema: { type: string } } ]
+      responses: { '200': { description: OK }, '404': { description: 无权限亦 404 } }
+  /claims/{claimId}/withdraw:
+    post:
+      tags: [M5-Claim]
+      summary: 申请人撤销待审申请（FR-CLAIM-05）
+      parameters: [ { name: claimId, in: path, required: true, schema: { type: string } } ]
+      responses: { '200': { description: OK } }
+  /claims/{claimId}/review:
+    post:
+      tags: [M5-Claim]
+      summary: 发布者审核（FR-CLAIM-03/04）
+      parameters: [ { name: claimId, in: path, required: true, schema: { type: string } } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decision]
+              properties:
+                decision: { type: string, enum: [ACCEPT, REJECT] }
+                reason: { type: string }
+      responses:
+        '200': { description: OK }
+        '409': { description: CLAIM_ACCEPT_CONFLICT }
+  /claims/{claimId}/confirmations:
+    post:
+      tags: [M5-Claim]
+      summary: 单方确认交接（FR-HANDOVER-01）
+      parameters: [ { name: claimId, in: path, required: true, schema: { type: string } } ]
+      responses:
+        '200':
+          description: 返回双方确认状态
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  claimStatus: { type: string }
+                  publisherConfirmed: { type: boolean }
+                  applicantConfirmed: { type: boolean }
+        '409': { description: HANDOVER_PAUSED_BY_DISPUTE }
+  /claims/{claimId}/cancel-handover:
+    post:
+      tags: [M5-Claim]
+      summary: 受控取消交接（FR-CLAIM-05）
+      parameters: [ { name: claimId, in: path, required: true, schema: { type: string } } ]
+      responses: { '200': { description: OK } }
+
+  # ---------------- M6 沟通/线索/争议 ----------------
+  /claims/{claimId}/messages:
+    get:
+      tags: [M6-Message]
+      summary: 申请内留言（FR-MSG-01）
+      parameters: [ { name: claimId, in: path, required: true, schema: { type: string } } ]
+      responses: { '200': { description: 列表 } }
+    post:
+      tags: [M6-Message]
+      summary: 发送留言
+      parameters: [ { name: claimId, in: path, required: true, schema: { type: string } } ]
+      responses: { '201': { description: OK } }
+  /posts/{postId}/leads:
+    get:
+      tags: [M6-Lead]
+      summary: 寻物发布者查看线索（FR-LEAD-01）
+      parameters: [ { name: postId, in: path, required: true, schema: { type: string } } ]
+      responses: { '200': { description: 列表 } }
+    post:
+      tags: [M6-Lead]
+      summary: 对 LOST 提交线索（FR-LEAD-01）
+      parameters: [ { name: postId, in: path, required: true, schema: { type: string } } ]
+      responses: { '201': { description: OK } }
+  /leads/{leadId}/review:
+    post:
+      tags: [M6-Lead]
+      summary: 寻物发布者处理线索（FR-LEAD-02）
+      parameters: [ { name: leadId, in: path, required: true, schema: { type: string } } ]
+      responses: { '200': { description: OK } }
+  /claims/{claimId}/disputes:
+    get:
+      tags: [M6-Dispute]
+      summary: 当事人查看争议（FR-DISPUTE-03）
+      parameters: [ { name: claimId, in: path, required: true, schema: { type: string } } ]
+      responses: { '200': { description: 列表 } }
+    post:
+      tags: [M6-Dispute]
+      summary: 发起争议（FR-DISPUTE-01）
+      parameters: [ { name: claimId, in: path, required: true, schema: { type: string } } ]
+      responses: { '201': { description: OK，创建后暂停交接完成 } }
+
+  # ---------------- M2 后台治理 ----------------
+  /admin/posts:
+    get: { tags: [M2-Admin], summary: 治理检索发布(FR-ADMIN-01), responses: { '200': { description: OK } } }
+  /admin/posts/{postId}/remove:
+    post:
+      tags: [M2-Admin]
+      summary: 下架（FR-ADMIN-01）
+      parameters: [ { name: postId, in: path, required: true, schema: { type: string } } ]
+      responses: { '200': { description: OK } }
+  /admin/posts/{postId}/restore:
+    post:
+      tags: [M2-Admin]
+      summary: 按规则恢复（FR-ADMIN-01）
+      parameters: [ { name: postId, in: path, required: true, schema: { type: string } } ]
+      responses: { '200': { description: OK } }
+  /admin/users:
+    get: { tags: [M2-Admin], summary: 治理检索用户(FR-ADMIN-02), responses: { '200': { description: OK } } }
+  /admin/users/{userId}/restrictions:
+    post:
+      tags: [M2-Admin]
+      summary: 限制用户（FR-ADMIN-02）
+      parameters: [ { name: userId, in: path, required: true, schema: { type: string } } ]
+      responses: { '200': { description: OK } }
+  /admin/users/{userId}/unrestrict:
+    post:
+      tags: [M2-Admin]
+      summary: 解除限制（FR-ADMIN-02）
+      parameters: [ { name: userId, in: path, required: true, schema: { type: string } } ]
+      responses: { '200': { description: OK } }
+  /admin/disputes:
+    get: { tags: [M2-Admin], summary: 争议列表(FR-DISPUTE-02), responses: { '200': { description: OK } } }
+  /admin/disputes/{disputeId}:
+    get:
+      tags: [M2-Admin]
+      summary: 受限查看争议（FR-DISPUTE-02）
+      parameters: [ { name: disputeId, in: path, required: true, schema: { type: string } } ]
+      responses: { '200': { description: OK } }
+  /admin/disputes/{disputeId}/resolution:
+    post:
+      tags: [M2-Admin]
+      summary: 裁决争议（FR-DISPUTE-02）
+      parameters: [ { name: disputeId, in: path, required: true, schema: { type: string } } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [resolutionType, resolutionNote]
+              properties:
+                resolutionType: { type: string, enum: [CONTINUE, TERMINATE_REOPEN, CLOSE] }
+                resolutionNote: { type: string }
+      responses: { '200': { description: OK } }
+  /admin/audit-logs:
+    get: { tags: [M2-Admin], summary: 审计日志(FR-AUDIT-01), responses: { '200': { description: OK } } }
+  /admin/maintenance/backups:
+    get: { tags: [M2-Admin], summary: 备份记录(FR-BACKUP-01), responses: { '200': { description: OK } } }
+    post: { tags: [M2-Admin], summary: 触发授权备份(FR-BACKUP-01), responses: { '202': { description: 已受理 } } }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    ApiEnvelope:
+      type: object
+      properties:
+        code: { type: string, example: OK }
+        message: { type: string }
+        data: {}
+        requestId: { type: string, nullable: true }
+    PostCreate:
+      type: object
+      required: [type, title, category, publicDescription]
+      properties:
+        type: { type: string, enum: [LOST, FOUND] }
+        title: { type: string, maxLength: 128 }
+        category: { type: string }
+        publicDescription: { type: string }
+        campus: { type: string, nullable: true }
+        eventLocation: { type: string, nullable: true }
+        eventTime: { type: string, format: date-time, nullable: true }
+        imageFileIds:
+          type: array
+          items: { type: string }
+    ClaimCreate:
+      type: object
+      required: [description]
+      properties:
+        description: { type: string, description: 私密证明文字（必填） }
+        evidenceFileIds:
+          type: array
+          items: { type: string }
+    MatchCandidate:
+      type: object
+      properties:
+        postId: { type: string }
+        score: { type: number, format: float }
+        reasons:
+          type: array
+          items: { type: string }
+        preview: { type: object }

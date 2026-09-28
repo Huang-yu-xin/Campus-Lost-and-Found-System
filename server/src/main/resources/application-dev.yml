@@ -1,0 +1,10 @@
+# 开发环境覆盖配置。真实机密请放 application-local.yml（已在 .gitignore）。
+spring:
+  config:
+    import: optional:classpath:application-local.yml
+
+app:
+  mock-login:
+    enabled: true          # 开发环境启用受限测试登录；生产 profile 必须为 false
+  campus-identity:
+    provider: disabled     # 本期正式默认禁用校园认证
