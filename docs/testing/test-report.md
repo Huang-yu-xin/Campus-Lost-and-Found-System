@@ -25,6 +25,9 @@
 | 管理后台 | `npm run build` | ✅ 1672 modules transformed，built |
 
 ## 4. 真实 DB 端到端冒烟（2026-09-28，已执行，活链路 curl）
+
+> ⚠️ 本表为早期手动冒烟记录，无原始输出存档；已被 `tests/e2e/e2e-smoke.sh` 自动化取代，当前有效证据见 §8 整改验证。
+
 后端 `mvn spring-boot:run`（dev，DB=campus_lost_found，Flyway 建表成功），健康检查 200。经 API 实测：
 
 | 用例 | 场景 | 实际结果 | 判定 |
@@ -63,10 +66,10 @@
 | 命令 | 结果 |
 |---|---|
 | `mvn test`（单元） | **19 passed**（含 B7/B8 StartupSecurityValidatorTest 5 项）BUILD SUCCESS |
-| `CLF_IT=true DB_NAME=campus_lost_found_test mvn verify`（集成，failsafe） | **单测 19 + 集成 9（ApiAuthzIT 8 + ClaimConcurrencyIT 1）全绿**，BUILD SUCCESS |
-| `tests/e2e/e2e-smoke.sh`（对运行中 dev 服务器） | **PASS 31 / FAIL 0** |
+| `CLF_IT=true DB_NAME=campus_lost_found_test mvn verify`（集成，failsafe） | **单测 19 + 集成 10（ApiAuthzIT 9 + ClaimConcurrencyIT 1）全绿**，BUILD SUCCESS（2026-09-29 收尾轮） |
+| `tests/e2e/e2e-smoke.sh`（对运行中 dev 服务器） | **PASS 31 / FAIL 0**（2026-09-29 收尾轮复跑） |
 
-ApiAuthzIT 覆盖：TC-AUTH-01(用户→后台403)、未登录写401、TC-CLAIM-01(自认领)、TC-POST-02(编辑他人403 + 有效申请后 POST_EDIT_LOCKED)、陌生人读申请404、TC-ADMIN-02(受限用户写403)、B5(未知路由404/非法JSON400)、B3(logout 撤销会话)。
+ApiAuthzIT 覆盖：TC-AUTH-01(用户→后台403)、未登录写401、TC-CLAIM-01(自认领)、TC-POST-02(编辑他人403 + 有效申请后 POST_EDIT_LOCKED)、陌生人读申请404、**TC-LEAD-01(第三方读他人线索404 + 提交者/发布者可读)**、TC-ADMIN-02(受限用户写403)、B5(未知路由404/非法JSON400)、B3(logout 撤销会话)。
 e2e-smoke 覆盖：登录/权限/发布/搜索/匹配(含 reasons)/自认领/重复认领/陌生人404/审核→HANDOVER/留言隔离/收到申请聚合/争议暂停/管理员受理+裁决/双向确认→COMPLETED/mark-found/审计过滤(含 CLAIM_REVIEW)/受限用户拒写(含留言 B2)/私密文件陌生人404+owner200/未知路由404/refresh+logout。
 
 > 整改中发现并修复的脚本/配置问题（非后端逻辑缺陷）已在 `docs/reports/P6-remediation-report.md` 登记。

@@ -41,8 +41,8 @@
 | FR-HANDOVER-01 | C | state-machines§4 | POST /claims/{id}/confirmations | handover | TC-HANDOVER-01/02 | 🟢 |
 | FR-HANDOVER-02 | C | state-machines§1-2 | (状态机) | handover | TC-DISPUTE-01 | 🟢 |
 | FR-MSG-01 | C | SRS§3-M6 | /claims/{id}/messages | message | — | 🟢 |
-| FR-LEAD-01 | C | SRS§3-M6 | /posts/{id}/leads | lead | TC-LEAD-01 | 🟢 |
-| FR-LEAD-02 | C | SRS§3-M6 | /users/me/leads,/leads/{id}/review | lead | TC-LEAD-01 | 🟢 |
+| FR-LEAD-01 | C | SRS§3-M6 | /posts/{id}/leads | lead | TC-LEAD-01 (ApiAuthzIT.strangerLead_404) | 🟢 |
+| FR-LEAD-02 | C | SRS§3-M6 | /users/me/leads,/leads/{id}/review | lead | TC-LEAD-01 (ApiAuthzIT.strangerLead_404) + e2e | 🟢 |
 | FR-DISPUTE-01 | C | state-machines§3 | POST /claims/{id}/disputes | dispute | TC-DISPUTE-01 | 🟢 |
 | FR-DISPUTE-02 | C | state-machines§3 | /admin/disputes/{id}/resolution | dispute,admin | TC-DISPUTE-02 | 🟢 |
 | FR-DISPUTE-03 | C | SRS§3-M6 | GET /claims/{id}/disputes | dispute | TC-DISPUTE-02 | 🟢 |

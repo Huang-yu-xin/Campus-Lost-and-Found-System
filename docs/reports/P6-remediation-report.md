@@ -4,11 +4,11 @@
 **依据**：《校园失物招领系统_验收整改与补全任务书.md》（2026-09-28 验收产出）
 **环境**：JDK 17.0.18 / Spring Boot 3.3.5 / MySQL 8.0.34（dev 库 campus_lost_found，隔离测试库 campus_lost_found_test）
 
-## 0. 总体结果
+## 0. 总体结果（2026-09-29 收尾轮）
 - 后端 `mvn test`：**19 单元测试全绿**。
-- 后端 `CLF_IT=true DB_NAME=campus_lost_found_test mvn verify`：**单测 19 + 集成 9（ApiAuthzIT 8 + ClaimConcurrencyIT 1）全绿，BUILD SUCCESS**。
-- `tests/e2e/e2e-smoke.sh`：**PASS 31 / FAIL 0**（对运行中的 dev 服务器）。
-- 小程序 `npm run build:mp-weixin`：成功。管理后台 `npm run build`：成功（1672 模块）。
+- 后端 `CLF_IT=true DB_NAME=campus_lost_found_test mvn verify`：**单测 19 + 集成 10（ApiAuthzIT 9 + ClaimConcurrencyIT 1）全绿，BUILD SUCCESS**（新增 TC-LEAD-01 用例后）。
+- `tests/e2e/e2e-smoke.sh`：**PASS 31 / FAIL 0**（对运行中的 dev 服务器，收尾轮复跑，原始输出见 §10）。
+- 小程序 `npm run build:mp-weixin`：成功。管理后台 `npm run build`：成功。
 - 机密（AppSecret / DB 密码）仅在 gitignored 的 `deploy/.env` 与 `application-local.yml`，`git status` 确认未入库。
 
 ## 1. B 组：后端小修
@@ -51,8 +51,22 @@
 | C4 | 401/UNAUTHENTICATED 清 token 跳登录 | ✅ |
 
 ## 5. D2/D3：测试
-- D2 `ApiAuthzIT`（8 组）：见 §0 verify 结果全绿。
+- D2 `ApiAuthzIT`（9 组，含收尾轮新增 TC-LEAD-01）：见 §0 verify 结果全绿。
 - D3 `tests/e2e/e2e-smoke.sh` 入库并启用 refresh/logout 断言：PASS 31 / FAIL 0。
+
+### D2 与任务书最小用例集的偏差声明
+| 任务书用例 | 现状 |
+|---|---|
+| adminEndpoint_forbiddenForUser (TC-AUTH-01) | ✅ 已实现 |
+| selfClaim_forbidden (TC-CLAIM-01) | ✅ 已实现 |
+| editOthersPost_forbidden (TC-POST-02) | ✅ 已实现（含 POST_EDIT_LOCKED） |
+| privateEvidence_404ForStranger (TC-FILE-01) | 由 `e2e-smoke.sh`「TC-FILE-01 stranger 404 / owner fetch 200」覆盖（未在 ApiAuthzIT 重复） |
+| lead_thirdParty_404 (TC-LEAD-01) | ✅ 已实现为 `ApiAuthzIT.strangerLead_404`（收尾轮补） |
+| dispute_pausesHandover (TC-DISPUTE-01) | 由 `e2e-smoke.sh`「TC-DISPUTE-01 pause」+ 管理员受理/裁决 覆盖（未在 ApiAuthzIT 重复） |
+| restrictedUser_writeRejected (TC-ADMIN-02) | ✅ 已实现 |
+| **roleField_notTrusted (TC-AUTH-02)** | **未单独实现**。原因：登录 DTO 不接受 role/userId 字段，身份一律来自服务端会话/JWT（`AuthContext` 不读请求体），结构上无法伪造；已由 `unauthenticated_write_401`（无有效会话即 401）与 `adminEndpoint_forbiddenForUser`（普通用户 token 无法访问后台）间接覆盖。如需显式断言可后续补充。 |
+
+> 额外补充：`unknownRoute_404_and_badJson_400`（B5）、`logout_revokesSession`（B3）也在 ApiAuthzIT 中。
 
 ## 6. E 组：文档回填
 - E1 README：进度叙事更正、swagger 地址修正为 `/api/v1/swagger-ui/index.html`、JDK17 JAVA_HOME 注意、测试/e2e 用法、遗留目录说明。
@@ -80,6 +94,49 @@
 | `f867c81` | feat(A) 小程序补全 A1-A7 + GET /leads/{id} |
 | `3d64502` | feat(C) 管理后台补全 C1-C4 |
 | `ed579e5` | test(D2) ApiAuthzIT 8 组 |
-| （本次） | docs(E) 文档回填 E1-E4 |
+| `8ec6dff` | docs(E) 文档回填 E1-E4 |
+| `727764a` | docs 重写 GitHub README |
+| （收尾轮） | fix(A1.5) 争议证据图 / test(TC-LEAD-01) / chore 死代码清理 / docs 收尾回填 |
 
 > 实际提交作者/审核由团队据实核对；本报告证据均来自实际运行输出。
+
+## 10. 收尾轮 e2e-smoke.sh 原始输出（2026-09-29）
+命令：`source deploy/.env && BASE=http://localhost:8080/api/v1 ADMIN_USER=$ADMIN_BOOTSTRAP_USERNAME ADMIN_PASS=$ADMIN_BOOTSTRAP_PASSWORD bash tests/e2e/e2e-smoke.sh`
+
+```text
+== smoke run #1790658368 ==
+PASS  three mock logins
+PASS  TC-AUTH-01 user->admin 403
+PASS  publish FOUND+LOST
+PASS  FR-SEARCH-01 combined search
+PASS  FR-MATCH opposite-type candidates
+PASS  match returns reasons
+PASS  TC-CLAIM-01 self claim
+PASS  TC-CLAIM-02 duplicate
+PASS  claim submitted
+PASS  NFR-SEC-01 stranger 404
+PASS  accept -> post HANDOVER
+PASS  FR-MSG-01 stranger 404
+PASS  B10 received-claims
+PASS  TC-DISPUTE-01 pause
+PASS  user cannot resolve
+PASS  B9 admin assign dispute
+PASS  FR-DISPUTE-02 resolve CONTINUE
+PASS  TC-HANDOVER-01 one-side
+PASS  TC-HANDOVER-02 idempotent
+PASS  both confirmed -> COMPLETED
+PASS  post COMPLETED
+PASS  TC-POST-05 mark found
+PASS  FR-AUDIT-01 audit filter
+PASS  B1 claim-review audit
+PASS  TC-ADMIN-02 restricted publish
+PASS  B2 restricted participant message
+PASS  TC-FILE-01 stranger 404
+PASS  owner fetch 200
+PASS  B5 unknown route 404
+PASS  B3 refresh issues new token
+PASS  B3 logout revokes session
+== RESULT: PASS 31 / FAIL 0 ==
+```
+
+> `mvn verify` 集成测试原始尾部：`Tests run: 10, Failures: 0, Errors: 0` → `BUILD SUCCESS`（ApiAuthzIT 9 + ClaimConcurrencyIT 1）。
