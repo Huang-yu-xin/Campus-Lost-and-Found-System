@@ -7,6 +7,9 @@ import edu.whut.clf.common.security.JwtService;
 import edu.whut.clf.common.security.Principal;
 import edu.whut.clf.auth.SessionService;
 import edu.whut.clf.common.enums.UserStatus;
+import edu.whut.clf.lead.LeadService;
+import edu.whut.clf.lead.dto.LeadDtos.SubmitLeadRequest;
+import edu.whut.clf.lead.dto.LeadDtos.LeadItem;
 import edu.whut.clf.post.PostService;
 import edu.whut.clf.post.dto.PostDtos.CreatePostRequest;
 import edu.whut.clf.post.dto.PostDtos.PostDetail;
@@ -40,6 +43,7 @@ class ApiAuthzIT {
     @Autowired UserMapper userMapper;
     @Autowired PostService postService;
     @Autowired ClaimService claimService;
+    @Autowired LeadService leadService;
     @Autowired ObjectMapper om;
 
     private Long newUser(String nick) {
@@ -63,6 +67,11 @@ class ApiAuthzIT {
     private PostDetail foundBy(Long uid, String title) {
         return postService.create(uid, new CreatePostRequest(
                 "FOUND", title, "wallet", "desc", "S", "Lib", null, List.of()));
+    }
+
+    private PostDetail lostBy(Long uid, String title) {
+        return postService.create(uid, new CreatePostRequest(
+                "LOST", title, "wallet", "desc", "S", "Lib", null, List.of()));
     }
 
     @Test
@@ -120,6 +129,23 @@ class ApiAuthzIT {
         var claim = claimService.submit(post.id(), b, new SubmitClaimRequest("mine", List.of()));
         mvc.perform(get("/claims/" + claim.id()).header("Authorization", bearer(c)))
                 .andExpect(jsonPath("$.code").value("CLAIM_NOT_FOUND"));
+    }
+
+    @Test
+    void strangerLead_404() throws Exception { // TC-LEAD-01：第三方读他人线索 404
+        Long a = newUser("lead-owner");      // 寻物发布者
+        Long b = newUser("lead-reporter");   // 线索提交者
+        Long c = newUser("lead-stranger");   // 无关第三方
+        PostDetail lost = lostBy(a, "lost-item");
+        LeadItem lead = leadService.submit(lost.id(), b, new SubmitLeadRequest("saw it near gate", List.of()));
+        // 第三方读线索 → 404
+        mvc.perform(get("/leads/" + lead.id()).header("Authorization", bearer(c)))
+                .andExpect(jsonPath("$.code").value("LEAD_NOT_FOUND"));
+        // 提交者与发布者可读 → OK
+        mvc.perform(get("/leads/" + lead.id()).header("Authorization", bearer(b)))
+                .andExpect(jsonPath("$.code").value("OK"));
+        mvc.perform(get("/leads/" + lead.id()).header("Authorization", bearer(a)))
+                .andExpect(jsonPath("$.code").value("OK"));
     }
 
     @Test
