@@ -98,14 +98,23 @@ export default {
       else uni.navigateTo({ url: '/pages/lead/detail?leadId=' + it.id })
     },
     editProfile() {
+      // uni 单输入弹窗限制：昵称、校区分两步录入，一并 PATCH
       uni.showModal({
-        title: '修改昵称', editable: true, placeholderText: this.me.nickname,
-        success: async (r) => {
-          if (r.confirm && r.content) {
-            await userApi.update({ nickname: r.content })
-            uni.showToast({ title: '已保存', icon: 'success' })
-            this.loadMe()
-          }
+        title: '修改昵称', editable: true, placeholderText: this.me.nickname || '昵称',
+        success: (r1) => {
+          if (!r1.confirm) return
+          const nickname = (r1.content || '').trim() || this.me.nickname
+          uni.showModal({
+            title: '修改校区（可留空）', editable: true, placeholderText: this.me.campus || '校区',
+            success: async (r2) => {
+              if (!r2.confirm) return
+              const payload = { nickname }
+              payload.campus = (r2.content || '').trim()
+              await userApi.update(payload)
+              uni.showToast({ title: '已保存', icon: 'success' })
+              this.loadMe()
+            }
+          })
         }
       })
     },

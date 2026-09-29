@@ -39,8 +39,21 @@
       <view class="mtitle">交接</view>
       <view v-if="hasOpenDispute" class="paused">存在未决争议，交接已暂停，请等待管理员裁决</view>
       <button class="btn primary" :disabled="hasOpenDispute" @click="confirm">我已完成交接</button>
-      <button class="btn" :disabled="hasOpenDispute" @click="raiseDispute">发起争议</button>
-      <button class="btn danger" v-if="!hasOpenDispute" @click="cancelHandover">取消本次交接</button>
+      <button class="btn" :disabled="hasOpenDispute" @click="showDisputeForm = !showDisputeForm">发起争议</button>
+      <button class="btn danger" v-if="claim.publisher && !hasOpenDispute" @click="cancelHandover">取消本次交接</button>
+
+      <view v-if="showDisputeForm && !hasOpenDispute" class="dform">
+        <textarea class="ta" v-model="disputeReason" placeholder="请填写争议原因" />
+        <text class="lb">证据图片（可选，最多3张）</text>
+        <view class="imgs">
+          <view class="imgbox" v-for="(p, i) in disputeImgs" :key="i">
+            <image class="thumb" :src="p" mode="aspectFill" />
+            <text class="del" @click="disputeImgs.splice(i,1)">×</text>
+          </view>
+          <view class="imgadd" v-if="disputeImgs.length < 3" @click="addDisputeImg">＋</view>
+        </view>
+        <button class="btn primary" :loading="submittingDispute" @click="submitDispute">提交争议</button>
+      </view>
     </view>
 
     <!-- 争议进度 -->
@@ -69,12 +82,15 @@
 </template>
 
 <script>
-import { claimApi, loadPrivateImage } from '../../api/index'
+import { claimApi, loadPrivateImage, uploadFile } from '../../api/index'
 import { claimStatusLabel } from '../../utils/labels'
 
 export default {
   data() {
-    return { claimId: null, claim: null, messages: [], disputes: [], eviImgs: [], msgText: '' }
+    return {
+      claimId: null, claim: null, messages: [], disputes: [], eviImgs: [], msgText: '',
+      showDisputeForm: false, disputeReason: '', disputeImgs: [], submittingDispute: false
+    }
   },
   computed: {
     hasOpenDispute() { return this.disputes.some((d) => d.status === 'OPEN') }
@@ -134,17 +150,23 @@ export default {
       uni.showToast({ title: '已取消交接', icon: 'success' })
       this.reloadAll()
     },
-    raiseDispute() {
-      uni.showModal({
-        title: '发起争议', editable: true, placeholderText: '请填写争议原因',
-        success: async (r) => {
-          if (r.confirm && r.content) {
-            await claimApi.raiseDispute(this.claimId, { reason: r.content, description: '', evidenceFileIds: [] })
-            uni.showToast({ title: '争议已提交，交接暂停', icon: 'none' })
-            this.reloadAll()
-          }
-        }
+    addDisputeImg() {
+      uni.chooseImage({
+        count: 3 - this.disputeImgs.length,
+        success: (r) => r.tempFilePaths.forEach((p) => { if (this.disputeImgs.length < 3) this.disputeImgs.push(p) })
       })
+    },
+    async submitDispute() {
+      if (!this.disputeReason.trim()) { uni.showToast({ title: '请填写争议原因', icon: 'none' }); return }
+      this.submittingDispute = true
+      try {
+        const evidenceFileIds = []
+        for (const p of this.disputeImgs) evidenceFileIds.push(await uploadFile(p, 'PRIVATE_DISPUTE'))
+        await claimApi.raiseDispute(this.claimId, { reason: this.disputeReason.trim(), description: '', evidenceFileIds })
+        uni.showToast({ title: '争议已提交，交接暂停', icon: 'none' })
+        this.showDisputeForm = false; this.disputeReason = ''; this.disputeImgs = []
+        this.reloadAll()
+      } catch (e) { /* toasted */ } finally { this.submittingDispute = false }
     },
     async send() {
       if (!this.msgText) return
@@ -184,4 +206,9 @@ export default {
 .msg.mine { background: #e8f0fe; text-align: right; }
 .msgbar { display: flex; margin-top: 14rpx; }
 .in { flex: 1; border: 1rpx solid #dcdfe6; border-radius: 8rpx; padding: 14rpx; margin-right: 12rpx; }
+.dform { margin-top: 14rpx; border-top: 1rpx solid #f0f0f0; padding-top: 14rpx; }
+.ta { border: 1rpx solid #dcdfe6; border-radius: 8rpx; padding: 16rpx; height: 130rpx; width: 100%; box-sizing: border-box; margin-bottom: 12rpx; }
+.imgbox { position: relative; width: 150rpx; height: 150rpx; margin: 6rpx; }
+.del { position: absolute; top: -10rpx; right: -10rpx; background: #f56c6c; color: #fff; width: 34rpx; height: 34rpx; border-radius: 50%; text-align: center; line-height: 34rpx; }
+.imgadd { width: 150rpx; height: 150rpx; margin: 6rpx; border: 1rpx dashed #c0c4cc; border-radius: 8rpx; text-align: center; line-height: 150rpx; font-size: 50rpx; color: #c0c4cc; }
 </style>

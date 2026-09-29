@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { ElMessage } from 'element-plus'
 
 // 统一请求封装。响应约定 { code, message, data, requestId }。
 const request = axios.create({
@@ -15,7 +16,8 @@ request.interceptors.request.use((config) => {
 function handleUnauthorized() {
   localStorage.removeItem('clf_admin_token')
   if (!location.pathname.includes('/login')) {
-    location.href = '/login'
+    ElMessage.warning('登录已失效，请重新登录')
+    setTimeout(() => { location.href = '/login' }, 800)
   }
 }
 

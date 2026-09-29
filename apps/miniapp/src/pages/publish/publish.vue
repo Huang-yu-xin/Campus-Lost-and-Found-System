@@ -72,12 +72,38 @@ export default {
     chooseImage() {
       uni.chooseImage({
         count: 6 - this.images.length,
-        success: (r) => {
-          for (const p of r.tempFilePaths) {
+        success: async (r) => {
+          const files = (r.tempFiles && r.tempFiles.length)
+            ? r.tempFiles
+            : (r.tempFilePaths || []).map((p) => ({ path: p, size: 0 }))
+          for (const f of files) {
             if (this.images.length >= 6) break
-            this.images.push({ url: p, localPath: p })
+            const path = f.path || f
+            if (f.size && f.size > 5 * 1024 * 1024) {
+              uni.showToast({ title: '单张图片不能超过 5MB', icon: 'none' })
+              continue
+            }
+            const ok = await this.checkImageType(path)
+            if (!ok) {
+              uni.showToast({ title: '仅支持 jpg/png/webp', icon: 'none' })
+              continue
+            }
+            this.images.push({ url: path, localPath: path })
           }
         }
+      })
+    },
+    checkImageType(path) {
+      // 客户端预校验；后端仍做 magic-byte 权威校验
+      return new Promise((resolve) => {
+        uni.getImageInfo({
+          src: path,
+          success: (info) => {
+            const t = (info.type || '').toLowerCase()
+            resolve(!t || ['jpg', 'jpeg', 'png', 'webp'].includes(t))
+          },
+          fail: () => resolve(true)
+        })
       })
     },
     removeImg(i) {
