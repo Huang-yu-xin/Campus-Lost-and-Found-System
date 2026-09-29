@@ -3,16 +3,30 @@
     <h3>审计与维护</h3>
     <el-tabs v-model="tab">
       <el-tab-pane label="审计日志" name="audit">
-        <el-button size="small" @click="loadAudit" style="margin-bottom:10px">刷新</el-button>
+        <el-form :inline="true">
+          <el-form-item label="动作">
+            <el-select v-model="action" clearable placeholder="全部" style="width:200px" @change="loadAudit">
+              <el-option v-for="a in actions" :key="a" :label="a" :value="a" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="对象">
+            <el-select v-model="targetType" clearable placeholder="全部" style="width:150px" @change="loadAudit">
+              <el-option v-for="t in targets" :key="t" :label="t" :value="t" />
+            </el-select>
+          </el-form-item>
+          <el-button @click="loadAudit">查询</el-button>
+        </el-form>
         <el-table :data="logs" v-loading="loadingA" border>
           <el-table-column prop="id" label="ID" width="70" />
           <el-table-column prop="actorType" label="操作者" width="90" />
-          <el-table-column prop="action" label="动作" width="160" />
+          <el-table-column prop="action" label="动作" width="170" />
           <el-table-column prop="targetType" label="对象" width="100" />
           <el-table-column prop="targetId" label="对象ID" width="90" />
           <el-table-column prop="result" label="结果" width="90" />
           <el-table-column prop="createdAt" label="时间" />
         </el-table>
+        <el-pagination style="margin-top:10px" layout="prev, pager, next, total" :total="totalA"
+          :page-size="pageSize" :current-page="pageA" @current-change="onPageA" />
       </el-tab-pane>
 
       <el-tab-pane label="备份记录" name="backup">
@@ -38,15 +52,22 @@ import { ElMessage } from 'element-plus'
 import { adminApi } from '../api'
 
 const tab = ref('audit')
-const logs = ref([]); const loadingA = ref(false)
+const actions = ['CLAIM_REVIEW', 'DISPUTE_RAISE', 'DISPUTE_ASSIGN', 'DISPUTE_RESOLVE', 'POST_REMOVE', 'POST_RESTORE', 'USER_RESTRICT', 'USER_UNRESTRICT', 'BACKUP_RUN']
+const targets = ['POST', 'USER', 'CLAIM', 'DISPUTE', 'BACKUP']
+const action = ref('')
+const targetType = ref('')
+const logs = ref([]); const loadingA = ref(false); const totalA = ref(0); const pageA = ref(1); const pageSize = 20
 const backups = ref([]); const loadingB = ref(false)
 const running = ref(false)
 
 async function loadAudit() {
   loadingA.value = true
-  try { logs.value = (await adminApi.auditLogs({ page: 1, pageSize: 50 })).items || [] }
-  catch (e) { ElMessage.error(e?.message || '加载失败') } finally { loadingA.value = false }
+  try {
+    const d = await adminApi.auditLogs({ action: action.value, targetType: targetType.value, page: pageA.value, pageSize })
+    logs.value = d.items || []; totalA.value = d.total || 0
+  } catch (e) { ElMessage.error(e?.message || '加载失败') } finally { loadingA.value = false }
 }
+function onPageA(p) { pageA.value = p; loadAudit() }
 async function loadBackups() {
   loadingB.value = true
   try { backups.value = (await adminApi.backups({ page: 1, pageSize: 50 })).items || [] }

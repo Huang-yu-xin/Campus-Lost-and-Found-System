@@ -5,8 +5,9 @@ const routes = [
   {
     path: '/',
     component: () => import('../layouts/AdminLayout.vue'),
-    redirect: '/posts',
+    redirect: '/dashboard',
     children: [
+      { path: 'dashboard', name: 'dashboard', component: () => import('../views/Dashboard.vue') },
       { path: 'posts', name: 'posts', component: () => import('../views/Posts.vue') },
       { path: 'users', name: 'users', component: () => import('../views/Users.vue') },
       { path: 'disputes', name: 'disputes', component: () => import('../views/Disputes.vue') },

@@ -12,15 +12,33 @@ request.interceptors.request.use((config) => {
   return config
 })
 
+function handleUnauthorized() {
+  localStorage.removeItem('clf_admin_token')
+  if (!location.pathname.includes('/login')) {
+    location.href = '/login'
+  }
+}
+
 request.interceptors.response.use(
   (resp) => {
     const body = resp.data
+    if (body && body.code === 'UNAUTHENTICATED') {
+      handleUnauthorized()
+      return Promise.reject(body)
+    }
     if (body && body.code && body.code !== 'OK') {
       return Promise.reject(body)
     }
     return body?.data
   },
-  (error) => Promise.reject(error?.response?.data || error)
+  (error) => {
+    const status = error?.response?.status
+    const body = error?.response?.data
+    if (status === 401 || body?.code === 'UNAUTHENTICATED') {
+      handleUnauthorized()
+    }
+    return Promise.reject(body || error)
+  }
 )
 
 export default request

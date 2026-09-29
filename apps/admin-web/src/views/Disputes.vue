@@ -17,6 +17,7 @@
       <el-table-column prop="claimId" label="申请ID" width="90" />
       <el-table-column prop="reason" label="原因" />
       <el-table-column prop="status" label="状态" width="110" />
+      <el-table-column prop="assignedAdminId" label="受理人" width="90" />
       <el-table-column label="操作" width="160">
         <template #default="{ row }">
           <el-button size="small" @click="openDetail(row.id)">查看/裁决</el-button>
@@ -24,17 +25,29 @@
       </el-table-column>
     </el-table>
 
-    <el-dialog v-model="dialog" title="争议详情与裁决" width="560px">
+    <el-dialog v-model="dialog" title="争议详情与裁决" width="620px">
       <div v-if="current">
-        <p><b>争议ID：</b>{{ current.id }} · <b>申请ID：</b>{{ current.claimId }}</p>
+        <p><b>争议ID：</b>{{ current.id }} · <b>申请ID：</b>{{ current.claimId }} · <b>状态：</b>{{ current.status }}</p>
         <p><b>原因：</b>{{ current.reason }}</p>
         <p><b>说明：</b>{{ current.description || '无' }}</p>
-        <p><b>证据文件：</b>{{ (current.evidenceFileIds || []).join(', ') || '无' }}</p>
-        <p><b>状态：</b>{{ current.status }}</p>
+        <p><b>受理人：</b>{{ current.assignedAdminId || '未受理' }}</p>
+
+        <el-alert v-if="current.status === 'OPEN' && !assigned" type="warning" :closable="false" show-icon
+          title="需先受理本争议，才能查看受限证据并进行裁决。" style="margin:8px 0" />
+        <el-button v-if="current.status === 'OPEN' && !assigned" type="primary" size="small" @click="assign">受理此争议</el-button>
+
+        <div style="margin-top:10px">
+          <b>证据文件：</b>
+          <template v-if="current.evidenceFileIds && current.evidenceFileIds.length">
+            <el-button v-for="fid in current.evidenceFileIds" :key="fid" size="small" text type="primary" @click="viewEvidence(fid)">查看#{{ fid }}</el-button>
+          </template>
+          <span v-else>无</span>
+        </div>
+
         <template v-if="current.status === 'OPEN'">
           <el-form label-width="90px" style="margin-top:12px">
             <el-form-item label="裁决">
-              <el-select v-model="resolutionType" style="width:220px">
+              <el-select v-model="resolutionType" style="width:260px">
                 <el-option label="继续交接 CONTINUE" value="CONTINUE" />
                 <el-option label="终止并重开 TERMINATE_REOPEN" value="TERMINATE_REOPEN" />
                 <el-option label="关闭处理 CLOSE" value="CLOSE" />
@@ -44,6 +57,7 @@
               <el-input v-model="note" type="textarea" />
             </el-form-item>
           </el-form>
+          <el-alert :closable="false" type="info" :title="previewText" />
         </template>
       </div>
       <template #footer>
@@ -51,13 +65,15 @@
         <el-button v-if="current && current.status === 'OPEN'" type="primary" @click="resolve">提交裁决</el-button>
       </template>
     </el-dialog>
+
+    <el-image-viewer v-if="viewerUrl" :url-list="[viewerUrl]" @close="viewerUrl = ''" />
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
-import { adminApi } from '../api'
+import { ref, computed } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { adminApi, fetchFileObjectUrl } from '../api'
 
 const items = ref([])
 const loading = ref(false)
@@ -66,6 +82,15 @@ const dialog = ref(false)
 const current = ref(null)
 const resolutionType = ref('CONTINUE')
 const note = ref('')
+const viewerUrl = ref('')
+const myId = ref(null)
+
+const assigned = computed(() => current.value && current.value.assignedAdminId != null)
+const previewText = computed(() => ({
+  CONTINUE: '结果：恢复交接，回到双方确认流程。',
+  TERMINATE_REOPEN: '结果：本次交接关闭，招领重新开放可申请。',
+  CLOSE: '结果：本次交接关闭，招领标记完成。'
+}[resolutionType.value] || ''))
 
 async function load() {
   loading.value = true
@@ -76,16 +101,29 @@ async function load() {
 }
 async function openDetail(id) {
   current.value = await adminApi.getDispute(id)
-  resolutionType.value = 'CONTINUE'
-  note.value = ''
+  resolutionType.value = 'CONTINUE'; note.value = ''
   dialog.value = true
+}
+async function assign() {
+  await adminApi.assignDispute(current.value.id)
+  ElMessage.success('已受理')
+  current.value = await adminApi.getDispute(current.value.id)
+  load()
+}
+async function viewEvidence(fid) {
+  try {
+    viewerUrl.value = await fetchFileObjectUrl(fid)
+  } catch (e) {
+    ElMessage.error(e.message || '无权查看，请先受理')
+  }
 }
 async function resolve() {
   if (!note.value) { ElMessage.warning('请填写裁决理由'); return }
+  await ElMessageBox.confirm(previewText.value, '确认裁决', { type: 'warning' })
   await adminApi.resolveDispute(current.value.id, resolutionType.value, note.value)
   ElMessage.success('裁决已提交')
   dialog.value = false
   load()
 }
-onMounted(load)
+load()
 </script>

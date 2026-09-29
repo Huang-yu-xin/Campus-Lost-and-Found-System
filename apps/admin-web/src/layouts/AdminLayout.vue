@@ -7,6 +7,7 @@
     <el-container>
       <el-aside width="200px">
         <el-menu :default-active="active" router>
+          <el-menu-item index="/dashboard">后台总览</el-menu-item>
           <el-menu-item index="/posts">信息治理</el-menu-item>
           <el-menu-item index="/users">用户治理</el-menu-item>
           <el-menu-item index="/disputes">争议处理</el-menu-item>

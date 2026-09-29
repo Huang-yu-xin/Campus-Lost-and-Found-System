@@ -33,7 +33,7 @@ async function login() {
     const data = await authApi.login(username.value, password.value)
     localStorage.setItem('clf_admin_token', data.accessToken)
     ElMessage.success('登录成功')
-    router.push('/posts')
+    router.push('/dashboard')
   } catch (e) {
     ElMessage.error(e?.message || '登录失败')
   } finally {
