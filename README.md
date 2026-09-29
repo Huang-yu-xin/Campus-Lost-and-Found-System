@@ -56,7 +56,10 @@ campus-lost-found/
 
 ## 4. 快速开始（开发环境）
 
-> ⚠️ 当前进度：**已完成 P0（脚手架/文档）+ P1（需求/架构/接口契约）**。P2 最小垂直切片尚未实现，下列启动命令为脚手架级别，业务功能待 P2 后可用。
+> 当前进度：**P0–P3 已完成并在真实 MySQL 端到端验证**，六模块业务闭环、并发单活跃交接、争议暂停、越权治理均通过测试；验收整改 A/B/C/D 组已完成（详见 `docs/reports/P6-remediation-report.md`）。待验证项（性能压测、微信真机、备份隔离恢复实跑）见 `docs/reports/P4-report.md`。
+
+> ⚠️ **JDK 注意**：本机默认 `JAVA_HOME` 可能指向 JDK 8，运行 Maven 前必须切到 JDK 17：
+> `export JAVA_HOME="/c/Users/huangyx/.jdks/ms-17.0.18"`（否则报 class file version 61.0 错误）。
 
 ### 4.1 准备环境变量
 
@@ -80,7 +83,19 @@ CREATE DATABASE campus_lost_found_test DEFAULT CHARACTER SET utf8mb4 COLLATE utf
 cd server
 mvn spring-boot:run          # 默认端口 8080，API 前缀 /api/v1
 # 健康检查： GET http://localhost:8080/api/v1/health
-# OpenAPI 文档： http://localhost:8080/swagger-ui/index.html
+# OpenAPI/Swagger UI： http://localhost:8080/api/v1/swagger-ui/index.html
+```
+
+### 4.3.1 测试与端到端冒烟
+
+```bash
+# 单元测试（无需数据库）
+cd server && mvn test
+# 集成测试（真实 MySQL；ClaimConcurrencyIT 并发 + ApiAuthzIT 鉴权）
+CLF_IT=true DB_NAME=campus_lost_found_test mvn verify   # 需先 export JDK17 + source ../deploy/.env
+# 端到端冒烟（对运行中的开发服务器；输出 PASS n / FAIL 0）
+source deploy/.env
+BASE=http://localhost:8080/api/v1 ADMIN_USER=$ADMIN_BOOTSTRAP_USERNAME ADMIN_PASS=$ADMIN_BOOTSTRAP_PASSWORD bash tests/e2e/e2e-smoke.sh
 ```
 
 ### 4.4 管理后台
@@ -124,3 +139,4 @@ npm run dev:mp-weixin       # 产物用微信开发者工具打开 apps/miniapp/
 - **微信登录**：仅在合法取得 AppID/密钥后启用；开发期使用受限测试登录，生产环境强制禁用测试登录。
 - **规则匹配不代替认领核验**：匹配结果仅供参考，不证明物品归属。
 - 安全规则由**后端强制执行**，前端隐藏不等于安全。
+- 根目录 `campus-lost-and-found/` 为课程早期微信云开发原型遗留，与当前实现无关、不参与构建（已 `.gitignore` 忽略），仅作历史参考，可删除。

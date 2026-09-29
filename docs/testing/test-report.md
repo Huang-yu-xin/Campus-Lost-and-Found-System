@@ -56,3 +56,20 @@
 
 ## 7. 缺陷与修复
 - 发现并修复：`MatchScorer` 双构造器导致 Spring 无法实例化（`No default constructor found`）→ 在注入构造器加 `@Autowired`，重启后上下文正常。（提交见对应 commit）
+
+## 8. 整改验证（P6，2026-09-29）
+整改任务 A/B/C/D 组完成后的实测：
+
+| 命令 | 结果 |
+|---|---|
+| `mvn test`（单元） | **19 passed**（含 B7/B8 StartupSecurityValidatorTest 5 项）BUILD SUCCESS |
+| `CLF_IT=true DB_NAME=campus_lost_found_test mvn verify`（集成，failsafe） | **单测 19 + 集成 9（ApiAuthzIT 8 + ClaimConcurrencyIT 1）全绿**，BUILD SUCCESS |
+| `tests/e2e/e2e-smoke.sh`（对运行中 dev 服务器） | **PASS 31 / FAIL 0** |
+
+ApiAuthzIT 覆盖：TC-AUTH-01(用户→后台403)、未登录写401、TC-CLAIM-01(自认领)、TC-POST-02(编辑他人403 + 有效申请后 POST_EDIT_LOCKED)、陌生人读申请404、TC-ADMIN-02(受限用户写403)、B5(未知路由404/非法JSON400)、B3(logout 撤销会话)。
+e2e-smoke 覆盖：登录/权限/发布/搜索/匹配(含 reasons)/自认领/重复认领/陌生人404/审核→HANDOVER/留言隔离/收到申请聚合/争议暂停/管理员受理+裁决/双向确认→COMPLETED/mark-found/审计过滤(含 CLAIM_REVIEW)/受限用户拒写(含留言 B2)/私密文件陌生人404+owner200/未知路由404/refresh+logout。
+
+> 整改中发现并修复的脚本/配置问题（非后端逻辑缺陷）已在 `docs/reports/P6-remediation-report.md` 登记。
+
+## 9. 仍待执行（外部条件）
+性能 P95（造 1 万数据集）、微信真机（合法 HTTPS 域名）、备份隔离恢复实跑（离线脚本）。未执行项一律标"待验证"，不写"已达标"。

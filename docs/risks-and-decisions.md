@@ -42,7 +42,30 @@
 3. 跨模块接口耦合 → 已在 P1 冻结契约与事务所有者缓解。
 4. 真机/性能/备份恢复受环境限制 → 如实标注"待验证"。
 
+## E. 代码层已知缺陷与整改记录（P6，2026-09-29）
+
+由 2026-09-28 验收产出《验收整改与补全任务书》，整改后逐项修复并验证：
+
+| ID | 缺陷 | 修复 | 验证 |
+|---|---|---|---|
+| B1 | 认领审核无审计 | review 内写 CLAIM_REVIEW 审计 | e2e/ApiAuthzIT |
+| B2 | 受限用户仍能发留言 | MessageService.send 加 requireNotRestricted | e2e "B2 restricted participant message" |
+| B3 | logout 空实现、无 refresh、sessions 表未用 | SessionService + 拦截器校验会话 + logout 撤销 + refresh | e2e refresh/logout；ApiAuthzIT logout_revokesSession |
+| B4 | 分页 total 用当前页数量冒充 | adminSearchCount / backup count | 实测 admin/posts total=14 |
+| B5 | 未知路由/非法 JSON 返回 500 | 加 NoResourceFound→404、HttpMessageNotReadable→400 | e2e/ApiAuthzIT |
+| B6 | 争议裁决状态转换不校验行数 | applyTermination 检查行数，0 则 409 回滚 | 代码 + 审阅 |
+| B7 | 生产无 mock 登录禁用强校验 | StartupSecurityValidator（非 dev/ci/test 且 mock 开启→拒启动） | 单测 5 项 |
+| B8 | 弱/默认 JWT 密钥被机械补长 | 生产拒绝默认/<32 字节密钥；空密钥保护 | 单测 |
+| B9 | 管理员裁决前无法查看证据 | 新增 assign 受理端点，受理后放行证据 | e2e assign；C3 |
+| B10 | 无"收到申请/线索"聚合端点 | /users/me/received-claims\|received-leads | e2e received-claims |
+| D1 | CI/verify 未真正跑 IT | 加 maven-failsafe-plugin | mvn verify 跑 9 IT |
+| 附带 | MatchScorer 双构造器致启动失败 | 注入构造器加 @Autowired | 服务启动成功 |
+| 附带 | e2e 脚本 post() 无 body 时 set -u 报错 / 文件字段名 | 脚本 `${3:-}` 与 fileId 修正 | PASS 31/0 |
+
+> 仍待验证（外部条件，非缺陷）：性能 P95、微信真机、备份隔离恢复实跑。
+
 ## 变更记录
 | 日期 | 变更 | 触发 |
 |---|---|---|
 | 2026-09-28 | 建立文档，冻结 D-01~D-16 默认值 | P1 需求冻结 |
+| 2026-09-29 | 登记 B1-B10/D1 整改缺陷与修复 | P6 验收整改 |
