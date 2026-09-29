@@ -1,10 +1,12 @@
-import { http } from '../utils/request'
+import { http, getToken } from '../utils/request'
 import { API_BASE } from '../utils/config'
 
 export const authApi = {
   mockLogin: (testUser, nickname) => http.post('/auth/mock/login', { testUser, nickname }),
   wechatLogin: (code, nickname) => http.post('/auth/wechat/login', { code, nickname }),
-  campusCapabilities: () => http.get('/auth/campus/capabilities')
+  campusCapabilities: () => http.get('/auth/campus/capabilities'),
+  logout: () => http.post('/auth/logout'),
+  refresh: () => http.post('/auth/refresh')
 }
 
 export const userApi = {
@@ -12,7 +14,9 @@ export const userApi = {
   update: (data) => http.patch('/users/me', data),
   myPosts: (page = 1) => http.get('/users/me/posts', { page }),
   myClaims: (page = 1) => http.get('/users/me/claims', { page }),
-  myLeads: (page = 1) => http.get('/users/me/leads', { page })
+  myLeads: (page = 1) => http.get('/users/me/leads', { page }),
+  receivedClaims: (page = 1) => http.get('/users/me/received-claims', { page }),
+  receivedLeads: (page = 1) => http.get('/users/me/received-leads', { page })
 }
 
 export const postApi = {
@@ -20,6 +24,7 @@ export const postApi = {
   search: (params) => http.get('/posts/search', params),
   detail: (id) => http.get('/posts/' + id),
   create: (data) => http.post('/posts', data),
+  update: (id, data) => http.patch('/posts/' + id, data),
   matches: (id) => http.get('/posts/' + id + '/matches'),
   withdraw: (id) => http.post('/posts/' + id + '/withdraw'),
   markFound: (id) => http.post('/posts/' + id + '/mark-found')
@@ -42,8 +47,74 @@ export const claimApi = {
 export const leadApi = {
   submit: (postId, data) => http.post('/posts/' + postId + '/leads', data),
   received: (postId) => http.get('/posts/' + postId + '/leads'),
+  detail: (leadId) => http.get('/leads/' + leadId),
   review: (leadId, status) => http.post('/leads/' + leadId + '/review', { status })
 }
 
-// 文件下载直链（图片用途为公开时可直接展示；私密文件需带鉴权，此处仅公开图片）
+// 公开图片直链（PUBLIC_POST 无需登录即可访问）。
 export const fileUrl = (fileId) => API_BASE + '/files/' + fileId
+
+/**
+ * 上传文件。purpose: PUBLIC_POST / PRIVATE_CLAIM / PRIVATE_LEAD / PRIVATE_DISPUTE。
+ * 返回 fileId。
+ */
+export function uploadFile(filePath, purpose) {
+  return new Promise((resolve, reject) => {
+    uni.uploadFile({
+      url: API_BASE + '/files',
+      filePath,
+      name: 'file',
+      formData: { purpose },
+      header: getToken() ? { Authorization: 'Bearer ' + getToken() } : {},
+      success: (res) => {
+        let body
+        try {
+          body = JSON.parse(res.data)
+        } catch (e) {
+          reject({ message: '上传响应解析失败' })
+          return
+        }
+        if (body.code !== 'OK') {
+          uni.showToast({ title: body.message || '上传失败', icon: 'none' })
+          reject(body)
+          return
+        }
+        resolve(body.data.fileId)
+      },
+      fail: (err) => {
+        uni.showToast({ title: '上传失败', icon: 'none' })
+        reject(err)
+      }
+    })
+  })
+}
+
+/**
+ * 加载私密图片（认领/线索/争议证据）：带 Bearer 请求字节流，写入临时文件后返回可用于 <image> 的路径。
+ * 无权时后端返回 404，reject。
+ */
+export function loadPrivateImage(fileId) {
+  return new Promise((resolve, reject) => {
+    uni.request({
+      url: API_BASE + '/files/' + fileId,
+      method: 'GET',
+      responseType: 'arraybuffer',
+      header: getToken() ? { Authorization: 'Bearer ' + getToken() } : {},
+      success: (res) => {
+        if (res.statusCode !== 200) {
+          reject(res)
+          return
+        }
+        const fs = uni.getFileSystemManager()
+        const path = `${uni.env.USER_DATA_PATH}/priv_${fileId}_${Date.now()}.img`
+        fs.writeFile({
+          filePath: path,
+          data: res.data,
+          success: () => resolve(path),
+          fail: reject
+        })
+      },
+      fail: reject
+    })
+  })
+}

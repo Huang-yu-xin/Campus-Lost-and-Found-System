@@ -50,6 +50,12 @@ public class LeadController {
         return ApiResponse.ok(leadService.receivedLeads(AuthContext.currentUserId(), page, pageSize));
     }
 
+    @GetMapping("/leads/{leadId}")
+    @Operation(summary = "查看单条线索（提交者/寻物发布者）FR-LEAD-02")
+    public ApiResponse<LeadItem> get(@PathVariable Long leadId) {
+        return ApiResponse.ok(leadService.get(leadId, AuthContext.currentUserId()));
+    }
+
     @PostMapping("/leads/{leadId}/review")
     @Operation(summary = "寻物发布者处理线索 FR-LEAD-02")
     public ApiResponse<Void> review(@PathVariable Long leadId, @Valid @RequestBody ReviewLeadRequest req) {

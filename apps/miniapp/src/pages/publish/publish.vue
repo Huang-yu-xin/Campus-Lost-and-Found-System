@@ -1,6 +1,6 @@
 <template>
   <view class="page">
-    <view class="tabs">
+    <view class="tabs" v-if="!editId">
       <text :class="['tab', form.type === 'LOST' ? 'on' : '']" @click="form.type = 'LOST'">寻物</text>
       <text :class="['tab', form.type === 'FOUND' ? 'on' : '']" @click="form.type = 'FOUND'">招领</text>
     </view>
@@ -14,36 +14,109 @@
       <picker mode="date" :value="dateStr" @change="onDate"><view class="in">{{ dateStr || '选择日期' }}</view></picker>
     </view>
 
-    <view v-if="form.type === 'FOUND'" class="tip">提示：请勿在公开描述里写出仅失主才知道的唯一性特征。</view>
-    <button class="btn primary" @click="submit">发布</button>
+    <view class="field">
+      <text class="lb">公开图片（最多6张，jpg/png/webp，单张≤5MB）</text>
+      <view class="imgs">
+        <view class="imgbox" v-for="(img, i) in images" :key="i">
+          <image class="img" :src="img.url" mode="aspectFill" @click="preview(i)" />
+          <text class="del" @click="removeImg(i)">×</text>
+        </view>
+        <view class="imgadd" v-if="images.length < 6" @click="chooseImage">＋</view>
+      </view>
+    </view>
+
+    <view v-if="editId" class="tip">提示：存在有效申请后，类别/时间/地点/核心描述/图片不可修改。</view>
+    <view v-else-if="form.type === 'FOUND'" class="tip">提示：请勿在公开描述里写出仅失主才知道的唯一性特征。</view>
+    <button class="btn primary" :loading="submitting" @click="submit">{{ editId ? '保存修改' : '发布' }}</button>
   </view>
 </template>
 
 <script>
-import { postApi } from '../../api/index'
+import { postApi, uploadFile, fileUrl } from '../../api/index'
 
 export default {
   data() {
     return {
+      editId: null,
       dateStr: '',
+      submitting: false,
+      images: [], // { url, fileId?, localPath? }
       form: { type: 'FOUND', title: '', category: '', publicDescription: '', campus: '', eventLocation: '', eventTime: null }
     }
   },
+  onLoad(query) {
+    if (query && query.id) {
+      this.editId = query.id
+      this.loadForEdit(query.id)
+    }
+  },
   methods: {
+    async loadForEdit(id) {
+      const d = await postApi.detail(id)
+      if (!d.mine) {
+        uni.showToast({ title: '只能编辑自己的发布', icon: 'none' })
+        setTimeout(() => uni.navigateBack(), 800)
+        return
+      }
+      this.form = {
+        type: d.type, title: d.title, category: d.category, publicDescription: d.publicDescription,
+        campus: d.campus || '', eventLocation: d.eventLocation || '', eventTime: d.eventTime || null
+      }
+      this.dateStr = d.eventTime ? d.eventTime.slice(0, 10) : ''
+      this.images = (d.imageFileIds || []).map((fid) => ({ url: fileUrl(fid), fileId: fid }))
+    },
     onDate(e) {
       this.dateStr = e.detail.value
       this.form.eventTime = e.detail.value + 'T00:00:00'
+    },
+    chooseImage() {
+      uni.chooseImage({
+        count: 6 - this.images.length,
+        success: (r) => {
+          for (const p of r.tempFilePaths) {
+            if (this.images.length >= 6) break
+            this.images.push({ url: p, localPath: p })
+          }
+        }
+      })
+    },
+    removeImg(i) {
+      this.images.splice(i, 1)
+    },
+    preview(i) {
+      uni.previewImage({ current: i, urls: this.images.map((x) => x.url) })
     },
     async submit() {
       if (!this.form.title || !this.form.category || !this.form.publicDescription) {
         uni.showToast({ title: '请填写标题/类别/描述', icon: 'none' })
         return
       }
+      this.submitting = true
       try {
-        await postApi.create({ ...this.form, imageFileIds: [] })
-        uni.showToast({ title: '发布成功', icon: 'success' })
-        setTimeout(() => uni.switchTab({ url: '/pages/index/index' }), 500)
-      } catch (e) { /* 已提示 */ }
+        // 上传新增本地图片，得到 fileId
+        const imageFileIds = []
+        for (const img of this.images) {
+          if (img.fileId) {
+            imageFileIds.push(img.fileId)
+          } else if (img.localPath) {
+            const fid = await uploadFile(img.localPath, 'PUBLIC_POST')
+            imageFileIds.push(fid)
+          }
+        }
+        const payload = { ...this.form, imageFileIds }
+        if (this.editId) {
+          await postApi.update(this.editId, payload)
+          uni.showToast({ title: '已保存', icon: 'success' })
+        } else {
+          await postApi.create(payload)
+          uni.showToast({ title: '发布成功', icon: 'success' })
+        }
+        setTimeout(() => uni.switchTab({ url: '/pages/index/index' }), 600)
+      } catch (e) {
+        // 错误 message 已由 request 层 toast（如 POST_EDIT_LOCKED）
+      } finally {
+        this.submitting = false
+      }
     }
   }
 }
@@ -58,6 +131,11 @@ export default {
 .lb { font-size: 24rpx; color: #909399; }
 .in { border: 1rpx solid #dcdfe6; border-radius: 8rpx; padding: 16rpx; margin-top: 10rpx; }
 .ta { border: 1rpx solid #dcdfe6; border-radius: 8rpx; padding: 16rpx; margin-top: 10rpx; height: 160rpx; width: 100%; box-sizing: border-box; }
+.imgs { display: flex; flex-wrap: wrap; margin-top: 12rpx; }
+.imgbox { position: relative; width: 160rpx; height: 160rpx; margin: 8rpx; }
+.img { width: 160rpx; height: 160rpx; border-radius: 8rpx; }
+.del { position: absolute; top: -10rpx; right: -10rpx; background: #f56c6c; color: #fff; width: 36rpx; height: 36rpx; border-radius: 50%; text-align: center; line-height: 36rpx; font-size: 28rpx; }
+.imgadd { width: 160rpx; height: 160rpx; margin: 8rpx; border: 1rpx dashed #c0c4cc; border-radius: 8rpx; text-align: center; line-height: 160rpx; font-size: 60rpx; color: #c0c4cc; }
 .tip { color: #e6a23c; font-size: 22rpx; margin: 16rpx 0; }
 .btn.primary { background: #2b6cb0; color: #fff; margin-top: 20rpx; }
 </style>

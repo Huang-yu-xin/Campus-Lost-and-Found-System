@@ -1,8 +1,11 @@
 <template>
   <view class="page">
     <view class="card profile" v-if="me">
-      <view class="nick">{{ me.nickname }}</view>
-      <view class="badge">校园身份未认证</view>
+      <view class="phead">
+        <view class="nick">{{ me.nickname }}</view>
+        <text class="edit" @click="editProfile">编辑资料</text>
+      </view>
+      <view class="badge">{{ campusText }}</view>
     </view>
     <view class="card" v-else>
       <button class="btn primary" @click="goLogin">去登录</button>
@@ -11,58 +14,107 @@
     <view class="seg" v-if="me">
       <text :class="['s', tab === 'posts' ? 'on' : '']" @click="switchTab('posts')">我的发布</text>
       <text :class="['s', tab === 'claims' ? 'on' : '']" @click="switchTab('claims')">我的申请</text>
+      <text :class="['s', tab === 'rclaims' ? 'on' : '']" @click="switchTab('rclaims')">收到申请</text>
       <text :class="['s', tab === 'leads' ? 'on' : '']" @click="switchTab('leads')">我的线索</text>
+      <text :class="['s', tab === 'rleads' ? 'on' : '']" @click="switchTab('rleads')">收到线索</text>
     </view>
 
     <view v-if="me">
       <view class="item" v-for="it in items" :key="it.id" @click="open(it)">
-        <text class="t">{{ it.title || ('申请#' + it.id) || ('线索#' + it.id) }}</text>
-        <text class="st">{{ it.status }}</text>
+        <text class="t">{{ title(it) }}</text>
+        <text class="st">{{ statusText(it) }}</text>
       </view>
-      <view v-if="items.length === 0" class="empty">暂无记录</view>
+      <view v-if="items.length === 0 && !loading" class="empty">暂无记录</view>
+      <view v-if="noMore && items.length" class="tipc">没有更多了</view>
       <button class="btn" @click="logout">退出登录</button>
     </view>
   </view>
 </template>
 
 <script>
-import { userApi } from '../../api/index'
+import { userApi, authApi } from '../../api/index'
 import { getToken, clearToken } from '../../utils/request'
+import { postStatusLabel, claimStatusLabel, leadStatusLabel } from '../../utils/labels'
 
 export default {
   data() {
-    return { me: null, tab: 'posts', items: [] }
+    return { me: null, campusText: '校园身份未认证', tab: 'posts', items: [], page: 1, pageSize: 20, loading: false, noMore: false }
   },
   onShow() {
-    if (getToken()) {
-      this.loadMe()
-    } else {
-      this.me = null
-    }
+    if (getToken()) { this.loadMe() } else { this.me = null }
   },
+  onReachBottom() { if (!this.noMore && !this.loading) this.loadMore() },
   methods: {
     async loadMe() {
       try {
         this.me = await userApi.me()
+        try {
+          const cap = await authApi.campusCapabilities()
+          this.campusText = cap.verificationEnabled ? '校园身份认证已开启' : '校园身份未认证（学校统一认证未接入）'
+        } catch (e) { /* keep default */ }
         this.switchTab(this.tab)
       } catch (e) { this.me = null }
     },
+    fetch(page) {
+      if (this.tab === 'posts') return userApi.myPosts(page)
+      if (this.tab === 'claims') return userApi.myClaims(page)
+      if (this.tab === 'rclaims') return userApi.receivedClaims(page)
+      if (this.tab === 'leads') return userApi.myLeads(page)
+      return userApi.receivedLeads(page)
+    },
     async switchTab(t) {
-      this.tab = t
-      let res
-      if (t === 'posts') res = await userApi.myPosts(1)
-      else if (t === 'claims') res = await userApi.myClaims(1)
-      else res = await userApi.myLeads(1)
-      this.items = res.items || []
+      this.tab = t; this.page = 1; this.noMore = false; this.loading = true
+      try {
+        const res = await this.fetch(1)
+        this.items = res.items || []
+        if (this.items.length < this.pageSize) this.noMore = true
+      } catch (e) { this.items = [] } finally { this.loading = false }
+    },
+    async loadMore() {
+      this.page += 1; this.loading = true
+      try {
+        const res = await this.fetch(this.page)
+        const items = res.items || []
+        this.items = this.items.concat(items)
+        if (items.length < this.pageSize) this.noMore = true
+      } catch (e) { /* */ } finally { this.loading = false }
+    },
+    title(it) {
+      if (this.tab === 'posts') return it.title
+      if (this.tab === 'claims') return '申请 · ' + (it.postId ? ('招领#' + it.postId) : ('#' + it.id))
+      if (this.tab === 'rclaims') return '收到申请 · ' + (it.postTitle || ('招领#' + it.postId))
+      if (this.tab === 'leads') return '线索 · 寻物#' + it.lostPostId
+      return '收到线索 · ' + (it.postTitle || ('寻物#' + it.lostPostId))
+    },
+    statusText(it) {
+      if (this.tab === 'posts') return postStatusLabel(it.status, it.type)
+      if (this.tab === 'claims' || this.tab === 'rclaims') return claimStatusLabel(it.status)
+      return leadStatusLabel(it.status)
     },
     open(it) {
       if (this.tab === 'posts') uni.navigateTo({ url: '/pages/detail/detail?id=' + it.id })
-      else if (this.tab === 'claims') uni.navigateTo({ url: '/pages/claim/detail?claimId=' + it.id })
+      else if (this.tab === 'claims' || this.tab === 'rclaims') uni.navigateTo({ url: '/pages/claim/detail?claimId=' + it.id })
+      else if (this.tab === 'rleads') uni.navigateTo({ url: '/pages/lead/detail?leadId=' + it.id + '&owner=1' })
+      else uni.navigateTo({ url: '/pages/lead/detail?leadId=' + it.id })
+    },
+    editProfile() {
+      uni.showModal({
+        title: '修改昵称', editable: true, placeholderText: this.me.nickname,
+        success: async (r) => {
+          if (r.confirm && r.content) {
+            await userApi.update({ nickname: r.content })
+            uni.showToast({ title: '已保存', icon: 'success' })
+            this.loadMe()
+          }
+        }
+      })
     },
     goLogin() { uni.navigateTo({ url: '/pages/login/login' }) },
-    logout() {
-      clearToken()
-      this.me = null
+    async logout() {
+      const r = await new Promise((res) => uni.showModal({ title: '确认退出?', success: res }))
+      if (!r.confirm) return
+      try { await authApi.logout() } catch (e) { /* ignore */ }
+      clearToken(); this.me = null
       uni.showToast({ title: '已退出', icon: 'none' })
     }
   }
@@ -72,13 +124,15 @@ export default {
 <style scoped>
 .page { padding: 20rpx; }
 .card { background: #fff; border-radius: 12rpx; padding: 30rpx; margin-bottom: 16rpx; }
+.phead { display: flex; justify-content: space-between; align-items: center; }
 .nick { font-size: 34rpx; font-weight: 700; }
+.edit { color: #2b6cb0; font-size: 26rpx; }
 .badge { display: inline-block; margin-top: 14rpx; font-size: 22rpx; color: #e6a23c; border: 1rpx solid #e6a23c; border-radius: 6rpx; padding: 2rpx 12rpx; }
-.seg { display: flex; background: #fff; border-radius: 12rpx; margin-bottom: 16rpx; }
-.s { flex: 1; text-align: center; padding: 20rpx; color: #606266; font-size: 26rpx; }
+.seg { display: flex; background: #fff; border-radius: 12rpx; margin-bottom: 16rpx; overflow-x: auto; }
+.s { flex: none; padding: 20rpx 18rpx; color: #606266; font-size: 24rpx; white-space: nowrap; }
 .s.on { color: #2b6cb0; font-weight: 700; }
 .item { background: #fff; border-radius: 10rpx; padding: 22rpx; margin-bottom: 12rpx; display: flex; justify-content: space-between; }
 .t { font-size: 28rpx; } .st { color: #909399; font-size: 24rpx; }
-.empty { text-align: center; color: #c0c4cc; margin: 60rpx 0; }
+.empty, .tipc { text-align: center; color: #c0c4cc; margin: 40rpx 0; }
 .btn { margin-top: 20rpx; } .btn.primary { background: #2b6cb0; color: #fff; }
 </style>

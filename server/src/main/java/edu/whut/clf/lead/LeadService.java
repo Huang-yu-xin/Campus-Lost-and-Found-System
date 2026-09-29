@@ -72,6 +72,21 @@ public class LeadService {
         return toItem(lead, true);
     }
 
+    /** 查看单条线索（线索提交者或寻物发布者可见，否则 404）。 */
+    public LeadItem get(Long leadId, Long userId) {
+        LostLead lead = leadMapper.findById(leadId);
+        if (lead == null) {
+            throw BusinessException.of(ErrorCode.LEAD_NOT_FOUND);
+        }
+        Post post = postService.getById(lead.getLostPostId());
+        boolean isReporter = Objects.equals(lead.getReporterId(), userId);
+        boolean isPublisher = Objects.equals(post.getPublisherId(), userId);
+        if (!isReporter && !isPublisher) {
+            throw BusinessException.of(ErrorCode.LEAD_NOT_FOUND);
+        }
+        return toItem(lead, true);
+    }
+
     /** 寻物发布者查看收到的线索。 */
     public List<LeadItem> postLeads(Long postId, Long userId) {
         Post post = postService.getById(postId);
