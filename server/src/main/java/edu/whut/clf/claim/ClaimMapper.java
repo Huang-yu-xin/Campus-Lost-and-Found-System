@@ -1,5 +1,6 @@
 package edu.whut.clf.claim;
 
+import edu.whut.clf.claim.dto.ReceivedClaimItem;
 import edu.whut.clf.claim.model.Claim;
 import org.apache.ibatis.annotations.*;
 
@@ -68,6 +69,21 @@ public interface ClaimMapper {
 
     @Update("UPDATE claims SET status = 'COMPLETED', completed_at = #{now}, version = version + 1 WHERE id = #{id} AND status = 'WAITING_HANDOVER'")
     int complete(@Param("id") Long id, @Param("now") LocalDateTime now);
+
+    /** 发布者收到的所有申请（联表 posts）。命中 idx_post_publisher + claims.post_id 外键索引。 */
+    @Select("""
+            SELECT c.id, c.post_id, p.title AS post_title, p.type AS post_type,
+                   c.applicant_id, c.status, c.created_at, c.reviewed_at
+            FROM claims c JOIN posts p ON c.post_id = p.id
+            WHERE p.publisher_id = #{publisherId}
+            ORDER BY c.created_at DESC
+            LIMIT #{offset}, #{limit}
+            """)
+    List<ReceivedClaimItem> findReceivedByPublisher(@Param("publisherId") Long publisherId,
+                                                    @Param("offset") int offset, @Param("limit") int limit);
+
+    @Select("SELECT COUNT(*) FROM claims c JOIN posts p ON c.post_id = p.id WHERE p.publisher_id = #{publisherId}")
+    long countReceivedByPublisher(Long publisherId);
 
     /** 治理下架发布时，关闭其有效申请（保留历史，标注原因）。 */
     @Update("""

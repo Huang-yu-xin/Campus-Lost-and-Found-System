@@ -55,4 +55,8 @@ public interface DisputeMapper {
     int resolve(@Param("id") Long id, @Param("status") String status, @Param("adminId") Long adminId,
                 @Param("resolutionType") String resolutionType, @Param("note") String note,
                 @Param("now") LocalDateTime now);
+
+    /** 受理：仅 OPEN 可受理，允许改派。返回受影响行数。 */
+    @Update("UPDATE disputes SET assigned_admin_id = #{adminId} WHERE id = #{id} AND status = 'OPEN'")
+    int assign(@Param("id") Long id, @Param("adminId") Long adminId);
 }

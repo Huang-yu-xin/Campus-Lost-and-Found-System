@@ -39,6 +39,14 @@ public class AdminDisputeController {
         return ApiResponse.ok(disputeService.adminGet(disputeId));
     }
 
+    @PostMapping("/{disputeId}/assign")
+    @Operation(summary = "受理争议 FR-DISPUTE-02（受理后方可查看受限证据）")
+    public ApiResponse<Void> assign(@PathVariable Long disputeId) {
+        Principal admin = AuthContext.requireAdmin();
+        disputeService.assign(disputeId, admin.userId());
+        return ApiResponse.ok(null);
+    }
+
     @PostMapping("/{disputeId}/resolution")
     @Operation(summary = "裁决争议 FR-DISPUTE-02")
     public ApiResponse<Void> resolve(@PathVariable Long disputeId, @Valid @RequestBody ResolveRequest req) {

@@ -43,8 +43,8 @@ public class AdminGovernanceService {
         int p = Math.max(1, page);
         int size = pageSize <= 0 || pageSize > 100 ? 20 : pageSize;
         List<Post> items = postMapper.adminSearch(status, type, (p - 1) * size, size);
-        // total 简化：无独立 count，返回当前页数量（后台可加专用 count，P4 完善）
-        return PageResult.of(items, items.size(), p, size);
+        long total = postMapper.adminSearchCount(status, type);
+        return PageResult.of(items, total, p, size);
     }
 
     @Transactional

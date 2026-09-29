@@ -82,7 +82,7 @@ public class BackupService {
         int p = Math.max(1, page);
         int size = pageSize <= 0 || pageSize > 100 ? 20 : pageSize;
         List<BackupRecord> items = mapper.list((p - 1) * size, size);
-        return PageResult.of(items, items.size(), p, size);
+        return PageResult.of(items, mapper.count(), p, size);
     }
 
     private void copyTree(Path src, Path dst, MessageDigest md, AtomicLong count) throws IOException {

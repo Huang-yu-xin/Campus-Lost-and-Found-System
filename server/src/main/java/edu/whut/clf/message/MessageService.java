@@ -5,6 +5,7 @@ import edu.whut.clf.common.error.BusinessException;
 import edu.whut.clf.common.error.ErrorCode;
 import edu.whut.clf.message.dto.MessageDtos.MessageItem;
 import edu.whut.clf.message.model.ClaimMessage;
+import edu.whut.clf.user.UserService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,10 +20,12 @@ public class MessageService {
 
     private final ClaimMessageMapper messageMapper;
     private final ClaimAccessService claimAccess;
+    private final UserService userService;
 
-    public MessageService(ClaimMessageMapper messageMapper, ClaimAccessService claimAccess) {
+    public MessageService(ClaimMessageMapper messageMapper, ClaimAccessService claimAccess, UserService userService) {
         this.messageMapper = messageMapper;
         this.claimAccess = claimAccess;
+        this.userService = userService;
     }
 
     @Transactional
@@ -38,6 +41,7 @@ public class MessageService {
     @Transactional
     public MessageItem send(Long claimId, Long userId, String body) {
         claimAccess.requireParticipant(claimId, userId);
+        userService.requireNotRestricted(userId);
         if (body == null || body.isBlank()) {
             throw new BusinessException(ErrorCode.INVALID_ARGUMENT, "留言不能为空");
         }

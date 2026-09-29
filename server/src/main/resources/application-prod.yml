@@ -1,0 +1,10 @@
+# 生产/正式环境配置。启动期由 StartupSecurityValidator 强制校验（B7/B8）。
+app:
+  mock-login:
+    # 默认关闭；若误传 MOCK_LOGIN_ENABLED=true，StartupSecurityValidator 会拒绝启动
+    enabled: ${MOCK_LOGIN_ENABLED:false}
+  campus-identity:
+    provider: disabled
+  auth:
+    # 必须通过环境变量 JWT_SECRET 注入 ≥32 字节随机密钥；未提供(空)会被启动校验拒绝
+    jwt-secret: ${JWT_SECRET:}

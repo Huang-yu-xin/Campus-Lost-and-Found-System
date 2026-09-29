@@ -1,9 +1,11 @@
 package edu.whut.clf.auth;
 
 import edu.whut.clf.auth.dto.AuthDtos.*;
+import edu.whut.clf.common.security.AuthContext;
 import edu.whut.clf.common.web.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
 
@@ -32,10 +34,21 @@ public class AuthController {
     }
 
     @PostMapping("/logout")
-    @Operation(summary = "退出 FR-AUTH-04（无状态令牌，客户端丢弃）")
-    public ApiResponse<Void> logout() {
-        // 无状态 JWT：客户端删除令牌即可。可撤销会话在后续迭代加入 sessions 表。
+    @Operation(summary = "退出 FR-AUTH-04（撤销服务端会话，令牌立即失效）")
+    public ApiResponse<Void> logout(HttpServletRequest request) {
+        authService.logout(bearer(request));
         return ApiResponse.ok(null);
+    }
+
+    @PostMapping("/refresh")
+    @Operation(summary = "续期 FR-AUTH-04（签发新令牌并撤销旧会话）")
+    public ApiResponse<LoginResponse> refresh(HttpServletRequest request) {
+        return ApiResponse.ok(authService.refresh(AuthContext.require(), bearer(request)));
+    }
+
+    private String bearer(HttpServletRequest request) {
+        String h = request.getHeader("Authorization");
+        return h != null && h.startsWith("Bearer ") ? h.substring(7) : null;
     }
 
     @GetMapping("/campus/capabilities")

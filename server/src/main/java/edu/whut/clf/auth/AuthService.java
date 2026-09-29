@@ -28,10 +28,11 @@ public class AuthService {
     private final AdminCredentialMapper adminCredentialMapper;
     private final UserMapper userMapper;
     private final PasswordEncoder passwordEncoder;
+    private final SessionService sessionService;
 
     public AuthService(AppProperties props, JwtService jwtService, WechatClient wechatClient,
                        AuthIdentityMapper identityMapper, AdminCredentialMapper adminCredentialMapper,
-                       UserMapper userMapper, PasswordEncoder passwordEncoder) {
+                       UserMapper userMapper, PasswordEncoder passwordEncoder, SessionService sessionService) {
         this.props = props;
         this.jwtService = jwtService;
         this.wechatClient = wechatClient;
@@ -39,6 +40,7 @@ public class AuthService {
         this.adminCredentialMapper = adminCredentialMapper;
         this.userMapper = userMapper;
         this.passwordEncoder = passwordEncoder;
+        this.sessionService = sessionService;
     }
 
     @Transactional
@@ -63,8 +65,28 @@ public class AuthService {
             throw BusinessException.of(ErrorCode.ADMIN_LOGIN_FAILED);
         }
         User user = userMapper.findById(cred.getAdminUserId());
-        String token = jwtService.issueAccessToken(user.getId(), Principal.ROLE_ADMIN);
-        return new LoginResponse(token, user.getId(), Principal.ROLE_ADMIN, user.getNickname());
+        return issueWithSession(user.getId(), Principal.ROLE_ADMIN, user.getNickname());
+    }
+
+    /** 退出：撤销当前 token 对应会话（FR-AUTH-04）。 */
+    public void logout(String rawToken) {
+        sessionService.revoke(rawToken);
+    }
+
+    /**
+     * 续期：校验当前 token + 会话活跃 → 签发新 token + 新会话 → 撤销旧会话。
+     * 由控制器传入已解析的 Principal 与原始 token。
+     */
+    @Transactional
+    public LoginResponse refresh(Principal principal, String rawToken) {
+        if (principal == null || !sessionService.isActive(rawToken)) {
+            throw BusinessException.of(ErrorCode.UNAUTHENTICATED);
+        }
+        User user = userMapper.findById(principal.userId());
+        String nickname = user != null ? user.getNickname() : null;
+        LoginResponse resp = issueWithSession(principal.userId(), principal.role(), nickname);
+        sessionService.revoke(rawToken);
+        return resp;
     }
 
     public CampusCapabilitiesResponse campusCapabilities() {
@@ -74,8 +96,14 @@ public class AuthService {
     }
 
     private LoginResponse issue(User user) {
-        String token = jwtService.issueAccessToken(user.getId(), Principal.ROLE_USER);
-        return new LoginResponse(token, user.getId(), Principal.ROLE_USER, user.getNickname());
+        return issueWithSession(user.getId(), Principal.ROLE_USER, user.getNickname());
+    }
+
+    /** 签发 token 并落地会话记录（三种登录与续期共用）。 */
+    private LoginResponse issueWithSession(Long userId, String role, String nickname) {
+        String token = jwtService.issueAccessToken(userId, role);
+        sessionService.create(userId, token);
+        return new LoginResponse(token, userId, role, nickname);
     }
 
     private User findOrCreateUser(String provider, String subject, String nickname) {

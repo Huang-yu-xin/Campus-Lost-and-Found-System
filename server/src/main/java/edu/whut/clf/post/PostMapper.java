@@ -116,4 +116,15 @@ public interface PostMapper {
             """)
     List<Post> adminSearch(@Param("status") String status, @Param("type") String type,
                            @Param("offset") int offset, @Param("limit") int limit);
+
+    @Select("""
+            <script>
+            SELECT COUNT(*) FROM posts
+            <where>
+              <if test="status != null and status != ''"> status = #{status} </if>
+              <if test="type != null and type != ''"> AND type = #{type} </if>
+            </where>
+            </script>
+            """)
+    long adminSearchCount(@Param("status") String status, @Param("type") String type);
 }

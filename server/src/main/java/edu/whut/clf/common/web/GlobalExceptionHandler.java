@@ -6,11 +6,13 @@ import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.UUID;
 
@@ -45,6 +47,21 @@ public class GlobalExceptionHandler {
         ErrorCode code = ErrorCode.FILE_TOO_LARGE;
         return ResponseEntity.status(code.httpStatus())
                 .body(ApiResponse.error(code.name(), code.defaultMessage(), requestId(req)));
+    }
+
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleNoResource(NoResourceFoundException ex, HttpServletRequest req) {
+        ErrorCode code = ErrorCode.NOT_FOUND;
+        return ResponseEntity.status(code.httpStatus())
+                .body(ApiResponse.error(code.name(), code.defaultMessage(), requestId(req)));
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ApiResponse<Void>> handleUnreadable(HttpMessageNotReadableException ex, HttpServletRequest req) {
+        // 不泄漏解析细节
+        ErrorCode code = ErrorCode.INVALID_ARGUMENT;
+        return ResponseEntity.status(code.httpStatus())
+                .body(ApiResponse.error(code.name(), "请求体格式错误", requestId(req)));
     }
 
     @ExceptionHandler(Exception.class)

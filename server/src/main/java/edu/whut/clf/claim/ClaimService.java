@@ -5,7 +5,9 @@ import edu.whut.clf.claim.model.Claim;
 import edu.whut.clf.common.enums.*;
 import edu.whut.clf.common.error.BusinessException;
 import edu.whut.clf.common.error.ErrorCode;
+import edu.whut.clf.common.security.Principal;
 import edu.whut.clf.common.web.PageResult;
+import edu.whut.clf.audit.AuditService;
 import edu.whut.clf.file.FileService;
 import edu.whut.clf.handover.HandoverConfirmationMapper;
 import edu.whut.clf.post.PostService;
@@ -33,11 +35,13 @@ public class ClaimService {
     private final PostService postService;
     private final UserService userService;
     private final FileService fileService;
+    private final AuditService auditService;
     private final ObjectProvider<ClaimDisputeGuard> disputeGuard;
 
     public ClaimService(ClaimMapper claimMapper, ClaimEvidenceFileMapper evidenceMapper,
                         HandoverConfirmationMapper handoverMapper, PostService postService,
                         UserService userService, FileService fileService,
+                        AuditService auditService,
                         ObjectProvider<ClaimDisputeGuard> disputeGuard) {
         this.claimMapper = claimMapper;
         this.evidenceMapper = evidenceMapper;
@@ -45,6 +49,7 @@ public class ClaimService {
         this.postService = postService;
         this.userService = userService;
         this.fileService = fileService;
+        this.auditService = auditService;
         this.disputeGuard = disputeGuard;
     }
 
@@ -118,6 +123,15 @@ public class ClaimService {
         return PageResult.of(list.stream().map(this::toSummary).toList(), total, p, size);
     }
 
+    /** 我作为发布者收到的所有申请（B10 / FR-CLAIM-02）。 */
+    public PageResult<edu.whut.clf.claim.dto.ReceivedClaimItem> receivedClaims(Long userId, int page, int pageSize) {
+        int p = Math.max(1, page);
+        int size = pageSize <= 0 || pageSize > 100 ? 20 : pageSize;
+        var items = claimMapper.findReceivedByPublisher(userId, (p - 1) * size, size);
+        long total = claimMapper.countReceivedByPublisher(userId);
+        return PageResult.of(items, total, p, size);
+    }
+
     public List<ClaimSummary> postClaims(Long postId, Long userId) {
         Post post = postService.getById(postId);
         if (!Objects.equals(post.getPublisherId(), userId)) {
@@ -161,6 +175,8 @@ public class ClaimService {
             if (n == 0) {
                 throw BusinessException.of(ErrorCode.CLAIM_NOT_PENDING);
             }
+            auditService.record(userId, Principal.ROLE_USER, "CLAIM_REVIEW", "CLAIM", claimId,
+                    "SUCCESS", "{\"decision\":\"REJECT\"}");
             return;
         }
         if (!"ACCEPT".equals(decision)) {
@@ -183,6 +199,8 @@ public class ClaimService {
             // uk_claim_active_handover 兜底
             throw BusinessException.of(ErrorCode.CLAIM_ACCEPT_CONFLICT);
         }
+        auditService.record(userId, Principal.ROLE_USER, "CLAIM_REVIEW", "CLAIM", claimId,
+                "SUCCESS", "{\"decision\":\"ACCEPT\"}");
     }
 
     @Transactional

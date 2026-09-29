@@ -80,7 +80,8 @@ public class DisputeService {
             }
         }
         auditService.record(userId, Principal.ROLE_USER, "DISPUTE_RAISE", "DISPUTE", d.getId(), "SUCCESS", null);
-        return toView(d);
+        // 回填 DB 默认值，使返回视图完整（insert 仅回填自增 id）
+        return toView(disputeMapper.findById(d.getId()));
     }
 
     public List<DisputeView> listForParticipant(Long claimId, Long userId) {
@@ -104,6 +105,20 @@ public class DisputeService {
             throw BusinessException.of(ErrorCode.DISPUTE_NOT_FOUND);
         }
         return toAdminView(d, true);
+    }
+
+    /** 管理员受理争议（B9）：受理后方可读取受限证据（DisputeEvidenceAccessChecker）。 */
+    @Transactional
+    public void assign(Long disputeId, Long adminId) {
+        Dispute d = disputeMapper.findById(disputeId);
+        if (d == null) {
+            throw BusinessException.of(ErrorCode.DISPUTE_NOT_FOUND);
+        }
+        int n = disputeMapper.assign(disputeId, adminId);
+        if (n == 0) {
+            throw BusinessException.of(ErrorCode.DISPUTE_NOT_OPEN);
+        }
+        auditService.record(adminId, Principal.ROLE_ADMIN, "DISPUTE_ASSIGN", "DISPUTE", disputeId, "SUCCESS", null);
     }
 
     @Transactional
@@ -138,17 +153,24 @@ public class DisputeService {
             case CONTINUE -> {
                 // 恢复交接，回到双方确认流程；claim/post 状态不变
             }
-            case TERMINATE_REOPEN -> {
-                claimMapper.changeStatus(claim.getId(), ClaimStatus.WAITING_HANDOVER.name(), ClaimStatus.CLOSED.name());
-                postService.tryTransition(claim.getPostId(), PostStatus.HANDOVER, PostStatus.ACTIVE);
-            }
-            case CLOSE -> {
-                claimMapper.changeStatus(claim.getId(), ClaimStatus.WAITING_HANDOVER.name(), ClaimStatus.CLOSED.name());
-                postService.tryTransition(claim.getPostId(), PostStatus.HANDOVER, PostStatus.COMPLETED);
-            }
+            case TERMINATE_REOPEN -> applyTermination(claim, PostStatus.ACTIVE);
+            case CLOSE -> applyTermination(claim, PostStatus.COMPLETED);
         }
         auditService.record(adminId, Principal.ROLE_ADMIN, "DISPUTE_RESOLVE", "DISPUTE", disputeId, "SUCCESS",
                 "{\"resolutionType\":\"" + type.name() + "\"}");
+    }
+
+    /**
+     * 终止本次交接并按目标状态处置招领；任一状态转换未命中(0 行)则抛冲突使整个裁决事务回滚，
+     * 避免"争议已标裁决但 claim/post 静默未变"的不一致（B6）。
+     */
+    private void applyTermination(Claim claim, PostStatus postTarget) {
+        int c = claimMapper.changeStatus(claim.getId(),
+                ClaimStatus.WAITING_HANDOVER.name(), ClaimStatus.CLOSED.name());
+        int p = postService.tryTransition(claim.getPostId(), PostStatus.HANDOVER, postTarget);
+        if (c == 0 || p == 0) {
+            throw BusinessException.of(ErrorCode.CLAIM_STATE_INVALID);
+        }
     }
 
     /** 供文件访问 checker 判断管理员是否为该争议的受理人。 */

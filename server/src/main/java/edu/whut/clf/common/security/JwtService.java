@@ -53,6 +53,10 @@ public class JwtService {
     }
 
     private static byte[] padTo32(byte[] input) {
+        if (input.length == 0) {
+            // 空密钥不可用（生产由 StartupSecurityValidator 给出更明确的拒绝信息）
+            throw new IllegalStateException("JWT 密钥不能为空：请配置 JWT_SECRET");
+        }
         if (input.length >= 32) {
             return input;
         }

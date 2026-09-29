@@ -1,5 +1,6 @@
 package edu.whut.clf.lead;
 
+import edu.whut.clf.lead.dto.ReceivedLeadItem;
 import edu.whut.clf.lead.model.LostLead;
 import org.apache.ibatis.annotations.*;
 
@@ -26,4 +27,18 @@ public interface LostLeadMapper {
 
     @Update("UPDATE lost_leads SET status = #{status} WHERE id = #{id}")
     int updateStatus(@Param("id") Long id, @Param("status") String status);
+
+    /** 寻物发布者收到的所有线索（联表 posts）。 */
+    @Select("""
+            SELECT l.id, l.lost_post_id, p.title AS post_title, l.reporter_id, l.body, l.status, l.created_at
+            FROM lost_leads l JOIN posts p ON l.lost_post_id = p.id
+            WHERE p.publisher_id = #{publisherId}
+            ORDER BY l.created_at DESC
+            LIMIT #{offset}, #{limit}
+            """)
+    List<ReceivedLeadItem> findReceivedByPublisher(@Param("publisherId") Long publisherId,
+                                                   @Param("offset") int offset, @Param("limit") int limit);
+
+    @Select("SELECT COUNT(*) FROM lost_leads l JOIN posts p ON l.lost_post_id = p.id WHERE p.publisher_id = #{publisherId}")
+    long countReceivedByPublisher(Long publisherId);
 }

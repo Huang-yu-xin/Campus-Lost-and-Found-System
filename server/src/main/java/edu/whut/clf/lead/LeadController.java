@@ -42,6 +42,14 @@ public class LeadController {
         return ApiResponse.ok(leadService.myLeads(AuthContext.currentUserId(), page, pageSize));
     }
 
+    @GetMapping("/users/me/received-leads")
+    @Operation(summary = "收到的线索（寻物发布者视角）FR-LEAD-02")
+    public ApiResponse<PageResult<edu.whut.clf.lead.dto.ReceivedLeadItem>> receivedLeads(
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "20") int pageSize) {
+        return ApiResponse.ok(leadService.receivedLeads(AuthContext.currentUserId(), page, pageSize));
+    }
+
     @PostMapping("/leads/{leadId}/review")
     @Operation(summary = "寻物发布者处理线索 FR-LEAD-02")
     public ApiResponse<Void> review(@PathVariable Long leadId, @Valid @RequestBody ReviewLeadRequest req) {

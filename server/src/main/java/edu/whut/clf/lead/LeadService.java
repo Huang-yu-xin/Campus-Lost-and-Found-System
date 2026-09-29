@@ -89,6 +89,15 @@ public class LeadService {
         return PageResult.of(list.stream().map(l -> toItem(l, true)).toList(), total, p, size);
     }
 
+    /** 我作为寻物发布者收到的所有线索（B10 / FR-LEAD-02）。 */
+    public PageResult<edu.whut.clf.lead.dto.ReceivedLeadItem> receivedLeads(Long userId, int page, int pageSize) {
+        int p = Math.max(1, page);
+        int size = pageSize <= 0 || pageSize > 100 ? 20 : pageSize;
+        var items = leadMapper.findReceivedByPublisher(userId, (p - 1) * size, size);
+        long total = leadMapper.countReceivedByPublisher(userId);
+        return PageResult.of(items, total, p, size);
+    }
+
     @Transactional
     public void review(Long leadId, Long userId, String statusRaw) {
         LostLead lead = leadMapper.findById(leadId);

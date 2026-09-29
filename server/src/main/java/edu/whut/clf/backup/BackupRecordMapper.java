@@ -26,4 +26,7 @@ public interface BackupRecordMapper {
 
     @Select("SELECT * FROM backup_records ORDER BY started_at DESC LIMIT #{offset}, #{limit}")
     List<BackupRecord> list(@Param("offset") int offset, @Param("limit") int limit);
+
+    @Select("SELECT COUNT(*) FROM backup_records")
+    long count();
 }
