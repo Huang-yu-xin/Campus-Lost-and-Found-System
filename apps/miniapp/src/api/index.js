@@ -32,7 +32,6 @@ export const postApi = {
 
 export const claimApi = {
   submit: (postId, data) => http.post('/posts/' + postId + '/claims', data),
-  received: (postId) => http.get('/posts/' + postId + '/claims'),
   detail: (claimId) => http.get('/claims/' + claimId),
   review: (claimId, decision, reason) => http.post('/claims/' + claimId + '/review', { decision, reason }),
   confirm: (claimId) => http.post('/claims/' + claimId + '/confirmations'),
@@ -46,7 +45,6 @@ export const claimApi = {
 
 export const leadApi = {
   submit: (postId, data) => http.post('/posts/' + postId + '/leads', data),
-  received: (postId) => http.get('/posts/' + postId + '/leads'),
   detail: (leadId) => http.get('/leads/' + leadId),
   review: (leadId, status) => http.post('/leads/' + leadId + '/review', { status })
 }

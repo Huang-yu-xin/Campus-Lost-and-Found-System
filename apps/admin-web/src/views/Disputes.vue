@@ -83,7 +83,6 @@ const current = ref(null)
 const resolutionType = ref('CONTINUE')
 const note = ref('')
 const viewerUrl = ref('')
-const myId = ref(null)
 
 const assigned = computed(() => current.value && current.value.assignedAdminId != null)
 const previewText = computed(() => ({
