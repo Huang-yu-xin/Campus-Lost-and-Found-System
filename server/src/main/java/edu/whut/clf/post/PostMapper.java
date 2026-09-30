@@ -11,9 +11,9 @@ public interface PostMapper {
 
     @Insert("""
             INSERT INTO posts (publisher_id, type, title, category, public_description, campus,
-                               event_location, event_time, status, version)
+                               event_location, event_time, published_at, status, version)
             VALUES (#{publisherId}, #{type}, #{title}, #{category}, #{publicDescription}, #{campus},
-                    #{eventLocation}, #{eventTime}, #{status}, 0)
+                    #{eventLocation}, #{eventTime}, #{publishedAt}, #{status}, 0)
             """)
     @Options(useGeneratedKeys = true, keyProperty = "id")
     int insert(Post post);

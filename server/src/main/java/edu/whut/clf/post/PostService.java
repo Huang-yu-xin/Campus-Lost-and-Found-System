@@ -56,6 +56,7 @@ public class PostService {
         p.setCampus(req.campus());
         p.setEventLocation(req.eventLocation());
         p.setEventTime(req.eventTime());
+        p.setPublishedAt(LocalDateTime.now());
         p.setStatus(PostStatus.ACTIVE.name());
         postMapper.insert(p);
         bindImages(p.getId(), userId, req.imageFileIds());
