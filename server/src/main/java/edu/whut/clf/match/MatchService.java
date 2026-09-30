@@ -13,6 +13,8 @@ import org.springframework.stereotype.Service;
 
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * 双向候选匹配（FR-MATCH-01/02）。对相反类型的有效发布评分排序。
@@ -45,18 +47,32 @@ public class MatchService {
         // 取相反类型的 ACTIVE 候选（上限适当放大后再按分过滤/截断）
         List<Post> candidates = postMapper.findCandidates(opposite, self.getId(), scorer.maxCandidates() * 5);
 
-        return candidates.stream()
-                .map(c -> {
-                    MatchScorer.Result r = scorer.score(self, c);
-                    List<Long> imageIds = imageMapper.findByPost(c.getId()).stream().map(PostImage::getFileId).toList();
-                    return new MatchCandidate(c.getId(), c.getType(), c.getTitle(), c.getCategory(),
-                            c.getCampus(), c.getEventLocation(), c.getEventTime(), r.score(), r.reasons(), imageIds);
-                })
-                .filter(mc -> mc.score() >= scorer.minScore())
+        // 先打分/过滤/排序/截断（不查图片），再为最终 ≤maxCandidates 条批量取图，避免 N+1。
+        List<Scored> top = candidates.stream()
+                .map(c -> new Scored(c, scorer.score(self, c)))
+                .filter(sc -> sc.result().score() >= scorer.minScore())
                 // 同分稳定次序：分数降序，其次 postId 升序
-                .sorted(Comparator.comparingDouble(MatchCandidate::score).reversed()
-                        .thenComparing(MatchCandidate::postId))
+                .sorted(Comparator.comparingDouble((Scored sc) -> sc.result().score()).reversed()
+                        .thenComparing(sc -> sc.post().getId()))
                 .limit(scorer.maxCandidates())
                 .toList();
+
+        if (top.isEmpty()) {
+            return List.of();
+        }
+        List<Long> topIds = top.stream().map(sc -> sc.post().getId()).toList();
+        Map<Long, List<Long>> imagesByPost = imageMapper.findByPostIds(topIds).stream()
+                .collect(Collectors.groupingBy(PostImage::getPostId,
+                        Collectors.mapping(PostImage::getFileId, Collectors.toList())));
+
+        return top.stream()
+                .map(sc -> new MatchCandidate(sc.post().getId(), sc.post().getType(), sc.post().getTitle(),
+                        sc.post().getCategory(), sc.post().getCampus(), sc.post().getEventLocation(),
+                        sc.post().getEventTime(), sc.result().score(), sc.result().reasons(),
+                        imagesByPost.getOrDefault(sc.post().getId(), List.of())))
+                .toList();
     }
+
+    /** 打分中间结果：候选帖 + 评分（图片延迟到截断后批量取）。 */
+    private record Scored(Post post, MatchScorer.Result result) {}
 }
