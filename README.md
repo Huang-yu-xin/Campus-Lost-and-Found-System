@@ -78,6 +78,7 @@ flowchart LR
 CREATE DATABASE campus_lost_found DEFAULT CHARACTER SET utf8mb4;
 CREATE DATABASE campus_lost_found_test DEFAULT CHARACTER SET utf8mb4;  -- 集成测试/隔离恢复库
 ```
+> 或使用 Docker 一键起库（含两个库 + utf8mb4）：`docker compose -f deploy/docker-compose.dev.yml up -d mysql`
 
 ### 2) 配置
 ```bash

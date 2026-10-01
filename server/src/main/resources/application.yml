@@ -61,6 +61,23 @@ app:
     orphan-cleanup-enabled: ${FILE_ORPHAN_CLEANUP:true}
   backup:
     dir: ${APP_BACKUP_DIR:./backups}
+  # 匹配权重与阈值：默认值与 AppProperties.Match 完全一致，仅做外部可覆盖（不改默认，不动打分公式）。
+  match:
+    w-category: ${MATCH_W_CATEGORY:0.40}
+    w-location: ${MATCH_W_LOCATION:0.25}
+    w-time: ${MATCH_W_TIME:0.30}
+    w-keyword: ${MATCH_W_KEYWORD:0.05}
+    time-window-days: ${MATCH_TIME_WINDOW_DAYS:14}
+    time-tolerance-hours: ${MATCH_TIME_TOLERANCE_HOURS:24}
+    max-candidates: ${MATCH_MAX_CANDIDATES:20}
+    min-score: ${MATCH_MIN_SCORE:0.70}
+    null-event-window-days: ${NULL_EVENT_WINDOW_DAYS:60}
+    candidate-arm-limit: ${CANDIDATE_ARM_LIMIT:500}
+    same-parent-score: ${SAME_PARENT_SCORE:0.5}
+    category-window-days: ${CATEGORY_WINDOW_DAYS:90}
+    w-unigram: ${W_UNIGRAM:0.5}
+    w-bigram: ${W_BIGRAM:0.5}
+    campus-mismatch-factor: ${CAMPUS_MISMATCH_FACTOR:0.3}
 
 logging:
   level:
