@@ -49,7 +49,7 @@ public class PostService {
         this.auditService = auditService;
     }
 
-    @Transactional
+    @Transactional(isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
     public PostDetail create(Long userId, CreatePostRequest req) {
         userService.requireNotRestricted(userId);
         PostType type;
@@ -69,7 +69,7 @@ public class PostService {
         p.setCampus(req.campus());
         p.setEventLocation(req.eventLocation());
         p.setEventTime(req.eventTime());
-        p.setPublishedAt(LocalDateTime.now());
+        p.setPublishedAt(LocalDateTime.now(java.time.Clock.systemUTC()));
         p.setStatus(PostStatus.ACTIVE.name());
         postMapper.insert(p);
         bindImages(p.getId(), userId, req.imageFileIds());
@@ -116,9 +116,11 @@ public class PostService {
         return PageResult.of(toSummaries(posts), total, pg.page(), pg.size());
     }
 
-    @Transactional
+    @Transactional(isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
     public PostDetail update(Long postId, Long userId, UpdatePostRequest req) {
-        Post post = requireOwned(postId, userId);
+        requireOwned(postId, userId);
+        Post post = lockForUpdate(postId);
+        validateNonBlank(req.title()); validateNonBlank(req.category()); validateNonBlank(req.publicDescription());
         if (!PostStatus.ACTIVE.name().equals(post.getStatus())) {
             throw BusinessException.of(ErrorCode.POST_NOT_EDITABLE);
         }
@@ -142,7 +144,7 @@ public class PostService {
         return detail(postId, userId);
     }
 
-    @Transactional
+    @Transactional(isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
     public void withdraw(Long postId, Long userId) {
         requireOwned(postId, userId);
         // D17：锁帖后以 FOR UPDATE 权威读复核状态与有效申请，消除"撤回与新申请"竞态产生的孤儿 PENDING
@@ -159,7 +161,7 @@ public class PostService {
         }
     }
 
-    @Transactional
+    @Transactional(isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
     public void markFound(Long postId, Long userId) {
         Post post = requireOwned(postId, userId);
         if (!PostType.LOST.name().equals(post.getType())) {
@@ -234,6 +236,10 @@ public class PostService {
     private boolean hasActiveClaim(Long postId) {
         PostClaimGuard guard = claimGuard.getIfAvailable();
         return guard != null && guard.hasActiveClaim(postId);
+    }
+
+    private void validateNonBlank(String value) {
+        if (value != null && value.isBlank()) throw new BusinessException(ErrorCode.INVALID_ARGUMENT, "已提供的必填字段不得为空");
     }
 
     private boolean coreFieldChanged(Post post, UpdatePostRequest req) {
@@ -322,6 +328,7 @@ public class PostService {
     private static final LocalDateTime EVENT_TIME_FLOOR = LocalDateTime.of(2000, 1, 1, 0, 0);
 
     private void validateEventTime(LocalDateTime eventTime) {
+        if (eventTime != null && eventTime.isAfter(LocalDateTime.now(java.time.Clock.systemUTC()))) throw new BusinessException(ErrorCode.INVALID_ARGUMENT, "事件时间不得晚于当前时间");
         if (eventTime != null && eventTime.isBefore(EVENT_TIME_FLOOR)) {
             throw new BusinessException(ErrorCode.INVALID_ARGUMENT, "事件时间不得早于 2000-01-01");
         }

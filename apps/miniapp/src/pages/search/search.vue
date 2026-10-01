@@ -40,6 +40,7 @@
 </template>
 
 <script>
+import { localDateBoundary } from '../../utils/time'
 import { postApi } from '../../api/index'
 
 // 类别字典规范子类（镜像 server/src/main/resources/matching/category-dictionary.v1.txt 的展示名）
@@ -65,8 +66,8 @@ export default {
     onPickCategory(e) { this.q.category = this.categoryOptions[Number(e.detail.value)] },
     params() {
       const p = { keyword: this.q.keyword, type: this.q.type, category: this.q.category, campus: this.q.campus, page: this.page, pageSize: this.pageSize }
-      if (this.fromStr) p.eventFrom = this.fromStr + 'T00:00:00'
-      if (this.toStr) p.eventTo = this.toStr + 'T23:59:59'
+      if (this.fromStr) p.eventFrom = localDateBoundary(this.fromStr)
+      if (this.toStr) p.eventTo = localDateBoundary(this.toStr, true)
       return p
     },
     async reload() {
@@ -85,13 +86,22 @@ export default {
       }
     },
     async loadMore() {
-      this.page += 1; this.loading = true
+      if (this.loading || this.noMore) return
+      const seq = this._seq
+      const nextPage = this.page + 1
+      this.loading = true
       try {
-        const res = await postApi.search(this.params())
+        const res = await postApi.search({ ...this.params(), page: nextPage })
+        if (seq !== this._seq) return
         const items = res.items || []
         this.list = this.list.concat(items)
-        if (items.length < this.pageSize) this.noMore = true
-      } catch (e) { this.page -= 1 /* E10 */ } finally { this.loading = false }
+        this.page = nextPage
+        this.noMore = items.length < this.pageSize
+      } catch (e) {
+        if (seq === this._seq) uni.showToast({ title: '加载更多失败，请重试', icon: 'none' })
+      } finally {
+        if (seq === this._seq) this.loading = false
+      }
     },
     reset() {
       this.q = { keyword: '', type: '', category: '', campus: '' }

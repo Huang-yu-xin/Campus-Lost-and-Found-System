@@ -1,39 +1,71 @@
 openapi: 3.0.3
 info:
   title: 校园失物招领系统 API
-  version: 0.1.0
-  description: >
-    P1 基线契约。权威版本由后端 springdoc 运行期生成（/api/v1/v3/api-docs）。
-    统一响应/错误码见 docs/api/conventions.md。私密对象无权限统一返回 404。
+  version: 0.2.0
+  description: 终审整改契约：与Controller method+path及实际HTTP行为对应；所有JSON成功为200且含ApiEnvelope，文件下载例外。时间UTC带Z；ID为int64数值。动态文件权限、受理授权见conventions。运行期springdoc用于交叉检查，不能替代此处业务契约。
 servers:
-  - url: /api/v1
-    description: 统一前缀
+- url: /api/v1
+  description: 统一前缀
 tags:
-  - name: M1-Auth
-  - name: M1-User
-  - name: M3-Post
-  - name: M3-File
-  - name: M4-Search
-  - name: M5-Claim
-  - name: M6-Message
-  - name: M6-Lead
-  - name: M6-Dispute
-  - name: M2-Admin
+- name: M1-Auth
+- name: M1-User
+- name: M3-Post
+- name: M3-File
+- name: M4-Search
+- name: M5-Claim
+- name: M6-Message
+- name: M6-Lead
+- name: M6-Dispute
+- name: M2-Admin
 security:
-  - bearerAuth: []
+- bearerAuth: []
 paths:
   /health:
     get:
-      tags: [M1-Auth]
+      tags:
+      - M1-Auth
       summary: 健康检查
       security: []
       responses:
-        '200': { description: OK }
-
-  # ---------------- M1 身份 ----------------
+        '200':
+          description: OK；统一响应封装
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/ApiEnvelope'
+                - type: object
+                  properties:
+                    data:
+                      $ref: '#/components/schemas/Health'
+        '400':
+          description: 参数格式或业务校验失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '403':
+          description: 角色或账户受限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '404':
+          description: 不存在或无权访问
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '409':
+          description: 状态/唯一约束冲突
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
   /auth/wechat/login:
     post:
-      tags: [M1-Auth]
+      tags:
+      - M1-Auth
       summary: 微信登录（FR-AUTH-01）
       security: []
       requestBody:
@@ -41,14 +73,47 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                code: { type: string, description: 小程序临时登录凭证 }
+              $ref: '#/components/schemas/WechatLoginRequest'
       responses:
-        '200': { description: 返回系统会话 }
+        '200':
+          description: OK；统一响应封装
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/ApiEnvelope'
+                - type: object
+                  properties:
+                    data:
+                      $ref: '#/components/schemas/LoginResponse'
+        '400':
+          description: 参数格式或业务校验失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '403':
+          description: 角色或账户受限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '404':
+          description: 不存在或无权访问
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '409':
+          description: 状态/唯一约束冲突
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
   /auth/mock/login:
     post:
-      tags: [M1-Auth]
+      tags:
+      - M1-Auth
       summary: 受限测试登录（FR-AUTH-02，生产禁用）
       security: []
       requestBody:
@@ -56,88 +121,723 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                testUser: { type: string, example: userA }
-      responses:
-        '200': { description: 返回测试会话 }
-        '403': { description: MOCK_LOGIN_DISABLED }
-  /admin/auth/login:
-    post:
-      tags: [M2-Admin]
-      summary: 管理员登录（FR-AUTH-03）
-      security: []
-      responses: { '200': { description: OK } }
-  /auth/logout:
-    post:
-      tags: [M1-Auth]
-      summary: 退出（FR-AUTH-04）
-      responses: { '200': { description: OK } }
-  /auth/refresh:
-    post:
-      tags: [M1-Auth]
-      summary: 刷新令牌（若启用）
-      security: []
-      responses: { '200': { description: OK } }
-  /auth/campus/capabilities:
-    get:
-      tags: [M1-Auth]
-      summary: 校园认证能力（FR-AUTH-05，本期 disabled）
-      security: []
+              $ref: '#/components/schemas/MockLoginRequest'
       responses:
         '200':
-          description: 能力状态
+          description: OK；统一响应封装
           content:
             application/json:
               schema:
                 allOf:
-                  - $ref: '#/components/schemas/ApiEnvelope'
-                  - type: object
-                    properties:
-                      data:
-                        type: object
-                        properties:
-                          provider: { type: string, example: disabled }
-                          verificationEnabled: { type: boolean, example: false }
+                - $ref: '#/components/schemas/ApiEnvelope'
+                - type: object
+                  properties:
+                    data:
+                      $ref: '#/components/schemas/LoginResponse'
+        '403':
+          description: MOCK_LOGIN_DISABLED
+        '400':
+          description: 参数格式或业务校验失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '404':
+          description: 不存在或无权访问
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '409':
+          description: 状态/唯一约束冲突
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+  /admin/auth/login:
+    post:
+      tags:
+      - M2-Admin
+      summary: 管理员登录（FR-AUTH-03）
+      security: []
+      responses:
+        '200':
+          description: OK；统一响应封装
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/ApiEnvelope'
+                - type: object
+                  properties:
+                    data:
+                      $ref: '#/components/schemas/LoginResponse'
+        '400':
+          description: 参数格式或业务校验失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '403':
+          description: 角色或账户受限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '404':
+          description: 不存在或无权访问
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '409':
+          description: 状态/唯一约束冲突
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminLoginRequest'
+  /auth/logout:
+    post:
+      tags:
+      - M1-Auth
+      summary: 退出（FR-AUTH-04）
+      responses:
+        '200':
+          description: OK；统一响应封装
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/ApiEnvelope'
+                - type: object
+                  properties:
+                    data:
+                      type: object
+                      nullable: true
+                      description: 该操作data为null
+        '400':
+          description: 参数格式或业务校验失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '401':
+          description: 未登录或会话失效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '403':
+          description: 角色或账户受限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '404':
+          description: 不存在或无权访问
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '409':
+          description: 状态/唯一约束冲突
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+  /auth/refresh:
+    post:
+      tags:
+      - M1-Auth
+      summary: 刷新短期令牌，撤销旧会话
+      responses:
+        '200':
+          description: OK；统一响应封装
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/ApiEnvelope'
+                - type: object
+                  properties:
+                    data:
+                      $ref: '#/components/schemas/LoginResponse'
+        '400':
+          description: 参数格式或业务校验失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '401':
+          description: 未登录或会话失效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '403':
+          description: 角色或账户受限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '404':
+          description: 不存在或无权访问
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '409':
+          description: 状态/唯一约束冲突
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+  /auth/campus/capabilities:
+    get:
+      tags:
+      - M1-Auth
+      summary: 校园认证能力（FR-AUTH-05，本期 disabled）
+      security: []
+      responses:
+        '200':
+          description: OK；统一响应封装
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/ApiEnvelope'
+                - type: object
+                  properties:
+                    data:
+                      $ref: '#/components/schemas/CampusCapabilitiesResponse'
+        '400':
+          description: 参数格式或业务校验失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '403':
+          description: 角色或账户受限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '404':
+          description: 不存在或无权访问
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '409':
+          description: 状态/唯一约束冲突
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
   /users/me:
     get:
-      tags: [M1-User]
+      tags:
+      - M1-User
       summary: 获取本人资料（FR-USER-01/02）
-      responses: { '200': { description: OK } }
+      responses:
+        '200':
+          description: OK；统一响应封装
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/ApiEnvelope'
+                - type: object
+                  properties:
+                    data:
+                      $ref: '#/components/schemas/UserProfileResponse'
+        '400':
+          description: 参数格式或业务校验失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '401':
+          description: 未登录或会话失效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '403':
+          description: 角色或账户受限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '404':
+          description: 不存在或无权访问
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '409':
+          description: 状态/唯一约束冲突
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
     patch:
-      tags: [M1-User]
+      tags:
+      - M1-User
       summary: 修改本人资料
-      responses: { '200': { description: OK } }
+      responses:
+        '200':
+          description: OK；统一响应封装
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/ApiEnvelope'
+                - type: object
+                  properties:
+                    data:
+                      $ref: '#/components/schemas/UserProfileResponse'
+        '400':
+          description: 参数格式或业务校验失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '401':
+          description: 未登录或会话失效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '403':
+          description: 角色或账户受限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '404':
+          description: 不存在或无权访问
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '409':
+          description: 状态/唯一约束冲突
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProfileRequest'
   /users/me/posts:
     get:
-      tags: [M3-Post]
+      tags:
+      - M3-Post
       summary: 我的发布（FR-POST-04）
-      responses: { '200': { description: 分页列表 } }
+      responses:
+        '200':
+          description: OK；统一响应封装
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/ApiEnvelope'
+                - type: object
+                  properties:
+                    data:
+                      type: object
+                      required:
+                      - items
+                      - total
+                      - page
+                      - pageSize
+                      properties:
+                        items:
+                          type: array
+                          items:
+                            $ref: '#/components/schemas/PostSummary'
+                        total:
+                          type: integer
+                          format: int64
+                        page:
+                          type: integer
+                          format: int32
+                        pageSize:
+                          type: integer
+                          format: int32
+        '400':
+          description: 参数格式或业务校验失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '401':
+          description: 未登录或会话失效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '403':
+          description: 角色或账户受限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '404':
+          description: 不存在或无权访问
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '409':
+          description: 状态/唯一约束冲突
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+      parameters:
+      - name: page
+        in: query
+        schema:
+          type: integer
+          default: 1
+          maximum: 100000
+      - name: pageSize
+        in: query
+        schema:
+          type: integer
+          default: 20
+          maximum: 100
   /users/me/claims:
     get:
-      tags: [M5-Claim]
+      tags:
+      - M5-Claim
       summary: 我的申请（FR-CLAIM-02）
-      responses: { '200': { description: 分页列表 } }
+      responses:
+        '200':
+          description: OK；统一响应封装
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/ApiEnvelope'
+                - type: object
+                  properties:
+                    data:
+                      type: object
+                      required:
+                      - items
+                      - total
+                      - page
+                      - pageSize
+                      properties:
+                        items:
+                          type: array
+                          items:
+                            $ref: '#/components/schemas/ClaimSummary'
+                        total:
+                          type: integer
+                          format: int64
+                        page:
+                          type: integer
+                          format: int32
+                        pageSize:
+                          type: integer
+                          format: int32
+        '400':
+          description: 参数格式或业务校验失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '401':
+          description: 未登录或会话失效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '403':
+          description: 角色或账户受限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '404':
+          description: 不存在或无权访问
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '409':
+          description: 状态/唯一约束冲突
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+      parameters:
+      - name: page
+        in: query
+        schema:
+          type: integer
+          default: 1
+          maximum: 100000
+      - name: pageSize
+        in: query
+        schema:
+          type: integer
+          default: 20
+          maximum: 100
   /users/me/leads:
     get:
-      tags: [M6-Lead]
+      tags:
+      - M6-Lead
       summary: 我提交的线索（FR-LEAD-02）
-      responses: { '200': { description: 分页列表 } }
+      responses:
+        '200':
+          description: OK；统一响应封装
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/ApiEnvelope'
+                - type: object
+                  properties:
+                    data:
+                      type: object
+                      required:
+                      - items
+                      - total
+                      - page
+                      - pageSize
+                      properties:
+                        items:
+                          type: array
+                          items:
+                            $ref: '#/components/schemas/LeadItem'
+                        total:
+                          type: integer
+                          format: int64
+                        page:
+                          type: integer
+                          format: int32
+                        pageSize:
+                          type: integer
+                          format: int32
+        '400':
+          description: 参数格式或业务校验失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '401':
+          description: 未登录或会话失效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '403':
+          description: 角色或账户受限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '404':
+          description: 不存在或无权访问
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '409':
+          description: 状态/唯一约束冲突
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+      parameters:
+      - name: page
+        in: query
+        schema:
+          type: integer
+          default: 1
+          maximum: 100000
+      - name: pageSize
+        in: query
+        schema:
+          type: integer
+          default: 20
+          maximum: 100
   /users/me/received-claims:
     get:
-      tags: [M5-Claim]
+      tags:
+      - M5-Claim
       summary: 我作为发布者收到的申请（FR-CLAIM-02）
-      responses: { '200': { description: 分页列表（含 postTitle） } }
+      responses:
+        '200':
+          description: OK；统一响应封装
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/ApiEnvelope'
+                - type: object
+                  properties:
+                    data:
+                      type: object
+                      required:
+                      - items
+                      - total
+                      - page
+                      - pageSize
+                      properties:
+                        items:
+                          type: array
+                          items:
+                            $ref: '#/components/schemas/ReceivedClaimItem'
+                        total:
+                          type: integer
+                          format: int64
+                        page:
+                          type: integer
+                          format: int32
+                        pageSize:
+                          type: integer
+                          format: int32
+        '400':
+          description: 参数格式或业务校验失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '401':
+          description: 未登录或会话失效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '403':
+          description: 角色或账户受限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '404':
+          description: 不存在或无权访问
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '409':
+          description: 状态/唯一约束冲突
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+      parameters:
+      - name: page
+        in: query
+        schema:
+          type: integer
+          default: 1
+          maximum: 100000
+      - name: pageSize
+        in: query
+        schema:
+          type: integer
+          default: 20
+          maximum: 100
   /users/me/received-leads:
     get:
-      tags: [M6-Lead]
+      tags:
+      - M6-Lead
       summary: 我作为寻物发布者收到的线索（FR-LEAD-02）
-      responses: { '200': { description: 分页列表 } }
-
-  # ---------------- M3 文件与发布 ----------------
+      responses:
+        '200':
+          description: OK；统一响应封装
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/ApiEnvelope'
+                - type: object
+                  properties:
+                    data:
+                      type: object
+                      required:
+                      - items
+                      - total
+                      - page
+                      - pageSize
+                      properties:
+                        items:
+                          type: array
+                          items:
+                            $ref: '#/components/schemas/ReceivedLeadItem'
+                        total:
+                          type: integer
+                          format: int64
+                        page:
+                          type: integer
+                          format: int32
+                        pageSize:
+                          type: integer
+                          format: int32
+        '400':
+          description: 参数格式或业务校验失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '401':
+          description: 未登录或会话失效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '403':
+          description: 角色或账户受限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '404':
+          description: 不存在或无权访问
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '409':
+          description: 状态/唯一约束冲突
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+      parameters:
+      - name: page
+        in: query
+        schema:
+          type: integer
+          default: 1
+          maximum: 100000
+      - name: pageSize
+        in: query
+        schema:
+          type: integer
+          default: 20
+          maximum: 100
   /files:
     post:
-      tags: [M3-File]
+      tags:
+      - M3-File
       summary: 上传文件（FR-FILE-01）
       requestBody:
         content:
@@ -145,338 +845,2497 @@ paths:
             schema:
               type: object
               properties:
-                file: { type: string, format: binary }
+                file:
+                  type: string
+                  format: binary
                 purpose:
                   type: string
-                  enum: [PUBLIC_POST, PRIVATE_CLAIM, PRIVATE_DISPUTE, PRIVATE_LEAD]
+                  enum:
+                  - PUBLIC_POST
+                  - PRIVATE_CLAIM
+                  - PRIVATE_DISPUTE
+                  - PRIVATE_LEAD
       responses:
-        '201': { description: 返回 fileId }
-        '413': { description: FILE_TOO_LARGE }
-        '415': { description: UNSUPPORTED_MEDIA_TYPE }
+        '413':
+          description: FILE_TOO_LARGE
+        '415':
+          description: UNSUPPORTED_MEDIA_TYPE
+        '200':
+          description: OK；统一响应封装
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/ApiEnvelope'
+                - type: object
+                  properties:
+                    data:
+                      $ref: '#/components/schemas/UploadResult'
+        '400':
+          description: 参数格式或业务校验失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '401':
+          description: 未登录或会话失效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '403':
+          description: 角色或账户受限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '404':
+          description: 不存在或无权访问
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '409':
+          description: 状态/唯一约束冲突
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
   /files/{fileId}:
     get:
-      tags: [M3-File]
+      tags:
+      - M3-File
       summary: 按用途鉴权下载
       parameters:
-        - { name: fileId, in: path, required: true, schema: { type: string } }
+      - name: fileId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
       responses:
-        '200': { description: 文件流 }
-        '404': { description: 不存在或无权限 }
+        '200':
+          description: 授权图片字节
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+            image/webp:
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: 不存在或无权限
+        '400':
+          description: 参数格式或业务校验失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '401':
+          description: 未登录或会话失效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '403':
+          description: 角色或账户受限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '409':
+          description: 状态/唯一约束冲突
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+      security:
+      - {}
+      - bearerAuth: []
   /posts:
     get:
-      tags: [M3-Post]
+      tags:
+      - M3-Post
       summary: 公开列表（FR-POST-03）
       security: []
       parameters:
-        - { name: page, in: query, schema: { type: integer, default: 1 } }
-        - { name: pageSize, in: query, schema: { type: integer, default: 20 } }
-        - { name: type, in: query, schema: { type: string, enum: [LOST, FOUND] } }
-        - { name: category, in: query, schema: { type: string } }
-        - { name: campus, in: query, schema: { type: string } }
-      responses: { '200': { description: 分页公开列表 } }
+      - name: page
+        in: query
+        schema:
+          type: integer
+          default: 1
+          maximum: 100000
+      - name: pageSize
+        in: query
+        schema:
+          type: integer
+          default: 20
+          maximum: 100
+      - name: type
+        in: query
+        schema:
+          type: string
+          enum:
+          - LOST
+          - FOUND
+      - name: category
+        in: query
+        schema:
+          type: string
+      - name: campus
+        in: query
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK；统一响应封装
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/ApiEnvelope'
+                - type: object
+                  properties:
+                    data:
+                      type: object
+                      required:
+                      - items
+                      - total
+                      - page
+                      - pageSize
+                      properties:
+                        items:
+                          type: array
+                          items:
+                            $ref: '#/components/schemas/PostSummary'
+                        total:
+                          type: integer
+                          format: int64
+                        page:
+                          type: integer
+                          format: int32
+                        pageSize:
+                          type: integer
+                          format: int32
+        '400':
+          description: 参数格式或业务校验失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '403':
+          description: 角色或账户受限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '404':
+          description: 不存在或无权访问
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '409':
+          description: 状态/唯一约束冲突
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
     post:
-      tags: [M3-Post]
+      tags:
+      - M3-Post
       summary: 发布寻物/招领（FR-POST-01/02）
       requestBody:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/PostCreate' }
+            schema:
+              $ref: '#/components/schemas/CreatePostRequest'
       responses:
-        '201': { description: 创建成功 }
-        '400': { description: INVALID_ARGUMENT }
+        '400':
+          description: INVALID_ARGUMENT
+        '200':
+          description: OK；统一响应封装
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/ApiEnvelope'
+                - type: object
+                  properties:
+                    data:
+                      $ref: '#/components/schemas/PostDetail'
+        '401':
+          description: 未登录或会话失效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '403':
+          description: 角色或账户受限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '404':
+          description: 不存在或无权访问
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '409':
+          description: 状态/唯一约束冲突
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
   /posts/search:
     get:
-      tags: [M4-Search]
+      tags:
+      - M4-Search
       summary: 组合筛选（FR-SEARCH-01）
       security: []
       parameters:
-        - { name: keyword, in: query, schema: { type: string } }
-        - { name: type, in: query, schema: { type: string, enum: [LOST, FOUND] } }
-        - { name: category, in: query, schema: { type: string } }
-        - { name: campus, in: query, schema: { type: string } }
-        - { name: eventFrom, in: query, schema: { type: string, format: date-time } }
-        - { name: eventTo, in: query, schema: { type: string, format: date-time } }
-        - { name: page, in: query, schema: { type: integer } }
-        - { name: pageSize, in: query, schema: { type: integer } }
-        - { name: sort, in: query, schema: { type: string, description: 白名单字段 } }
-      responses: { '200': { description: 分页结果 } }
+      - name: keyword
+        in: query
+        schema:
+          type: string
+      - name: type
+        in: query
+        schema:
+          type: string
+          enum:
+          - LOST
+          - FOUND
+      - name: category
+        in: query
+        schema:
+          type: string
+      - name: campus
+        in: query
+        schema:
+          type: string
+      - name: eventFrom
+        in: query
+        schema:
+          type: string
+          format: date-time
+      - name: eventTo
+        in: query
+        schema:
+          type: string
+          format: date-time
+      - name: page
+        in: query
+        schema:
+          type: integer
+          default: 1
+          maximum: 100000
+      - name: pageSize
+        in: query
+        schema:
+          type: integer
+          default: 20
+          maximum: 100
+      - name: sort
+        in: query
+        schema:
+          type: string
+          description: 白名单字段
+      responses:
+        '200':
+          description: OK；统一响应封装
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/ApiEnvelope'
+                - type: object
+                  properties:
+                    data:
+                      type: object
+                      required:
+                      - items
+                      - total
+                      - page
+                      - pageSize
+                      properties:
+                        items:
+                          type: array
+                          items:
+                            $ref: '#/components/schemas/PostSummary'
+                        total:
+                          type: integer
+                          format: int64
+                        page:
+                          type: integer
+                          format: int32
+                        pageSize:
+                          type: integer
+                          format: int32
+        '400':
+          description: 参数格式或业务校验失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '403':
+          description: 角色或账户受限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '404':
+          description: 不存在或无权访问
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '409':
+          description: 状态/唯一约束冲突
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
   /posts/{postId}:
     get:
-      tags: [M3-Post]
+      tags:
+      - M3-Post
       summary: 详情（FR-POST-03）
       security: []
-      parameters: [ { name: postId, in: path, required: true, schema: { type: string } } ]
-      responses: { '200': { description: OK }, '404': { description: NOT_FOUND } }
+      parameters:
+      - name: postId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      responses:
+        '200':
+          description: OK；统一响应封装
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/ApiEnvelope'
+                - type: object
+                  properties:
+                    data:
+                      $ref: '#/components/schemas/PostDetail'
+        '404':
+          description: NOT_FOUND
+        '400':
+          description: 参数格式或业务校验失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '403':
+          description: 角色或账户受限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '409':
+          description: 状态/唯一约束冲突
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
     patch:
-      tags: [M3-Post]
+      tags:
+      - M3-Post
       summary: 本人编辑（FR-POST-04，核心字段可能被锁）
-      parameters: [ { name: postId, in: path, required: true, schema: { type: string } } ]
-      responses: { '200': { description: OK }, '409': { description: POST_EDIT_LOCKED } }
+      parameters:
+      - name: postId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      responses:
+        '200':
+          description: OK；统一响应封装
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/ApiEnvelope'
+                - type: object
+                  properties:
+                    data:
+                      $ref: '#/components/schemas/PostDetail'
+        '409':
+          description: POST_EDIT_LOCKED
+        '400':
+          description: 参数格式或业务校验失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '401':
+          description: 未登录或会话失效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '403':
+          description: 角色或账户受限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '404':
+          description: 不存在或无权访问
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePostRequest'
   /posts/{postId}/withdraw:
     post:
-      tags: [M3-Post]
+      tags:
+      - M3-Post
       summary: 受控撤回（FR-POST-05）
-      parameters: [ { name: postId, in: path, required: true, schema: { type: string } } ]
-      responses: { '200': { description: OK }, '409': { description: 冲突 } }
+      parameters:
+      - name: postId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      responses:
+        '200':
+          description: OK；统一响应封装
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/ApiEnvelope'
+                - type: object
+                  properties:
+                    data:
+                      type: object
+                      nullable: true
+                      description: 该操作data为null
+        '409':
+          description: 冲突
+        '400':
+          description: 参数格式或业务校验失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '401':
+          description: 未登录或会话失效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '403':
+          description: 角色或账户受限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '404':
+          description: 不存在或无权访问
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
   /posts/{postId}/mark-found:
     post:
-      tags: [M3-Post]
+      tags:
+      - M3-Post
       summary: LOST 标记已找回（FR-POST-05）
-      parameters: [ { name: postId, in: path, required: true, schema: { type: string } } ]
-      responses: { '200': { description: OK } }
+      parameters:
+      - name: postId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      responses:
+        '200':
+          description: OK；统一响应封装
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/ApiEnvelope'
+                - type: object
+                  properties:
+                    data:
+                      type: object
+                      nullable: true
+                      description: 该操作data为null
+        '400':
+          description: 参数格式或业务校验失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '401':
+          description: 未登录或会话失效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '403':
+          description: 角色或账户受限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '404':
+          description: 不存在或无权访问
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '409':
+          description: 状态/唯一约束冲突
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
   /posts/{postId}/matches:
     get:
-      tags: [M4-Search]
+      tags:
+      - M4-Search
       summary: 双向候选匹配与原因（FR-MATCH-01/02）
-      parameters: [ { name: postId, in: path, required: true, schema: { type: string } } ]
+      parameters:
+      - name: postId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
       responses:
         '200':
-          description: 候选+分数+命中规则
+          description: OK；统一响应封装
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  items:
-                    type: array
-                    items: { $ref: '#/components/schemas/MatchCandidate' }
-
-  # ---------------- M5 认领与交接 ----------------
+                allOf:
+                - $ref: '#/components/schemas/ApiEnvelope'
+                - type: object
+                  properties:
+                    data:
+                      type: array
+                      items:
+                        $ref: '#/components/schemas/MatchCandidate'
+        '400':
+          description: 参数格式或业务校验失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '403':
+          description: 角色或账户受限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '404':
+          description: 不存在或无权访问
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '409':
+          description: 状态/唯一约束冲突
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+      security: []
   /posts/{postId}/claims:
     get:
-      tags: [M5-Claim]
+      tags:
+      - M5-Claim
       summary: 发布者查看收到的申请（FR-CLAIM-02）
-      parameters: [ { name: postId, in: path, required: true, schema: { type: string } } ]
-      responses: { '200': { description: 列表 } }
-    post:
-      tags: [M5-Claim]
-      summary: 对 FOUND 发起认领（FR-CLAIM-01）
-      description: >
-        幂等策略（裁决 R1）：重复提交由 DB 唯一约束 uk_claim_active_applicant + 状态条件更新保障，
-        **未启用 Idempotency-Key 请求头**；idempotency_records 表为预留，当前未引用。
       parameters:
-        - { name: postId, in: path, required: true, schema: { type: string } }
-      requestBody:
+      - name: postId
+        in: path
         required: true
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/ClaimCreate' }
-      responses:
-        '201': { description: 创建成功 }
-        '403': { description: SELF_CLAIM_FORBIDDEN }
-        '409': { description: POST_NOT_CLAIMABLE / ACTIVE_CLAIM_EXISTS（重复认领兜底） }
-  /claims/{claimId}:
-    get:
-      tags: [M5-Claim]
-      summary: 查看申请（本人/发布者）
-      parameters: [ { name: claimId, in: path, required: true, schema: { type: string } } ]
-      responses: { '200': { description: OK }, '404': { description: 无权限亦 404 } }
-  /claims/{claimId}/withdraw:
-    post:
-      tags: [M5-Claim]
-      summary: 申请人撤销待审申请（FR-CLAIM-05）
-      parameters: [ { name: claimId, in: path, required: true, schema: { type: string } } ]
-      responses: { '200': { description: OK } }
-  /claims/{claimId}/review:
-    post:
-      tags: [M5-Claim]
-      summary: 发布者审核（FR-CLAIM-03/04）
-      parameters: [ { name: claimId, in: path, required: true, schema: { type: string } } ]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [decision]
-              properties:
-                decision: { type: string, enum: [ACCEPT, REJECT] }
-                reason: { type: string }
-      responses:
-        '200': { description: OK }
-        '409': { description: CLAIM_ACCEPT_CONFLICT }
-  /claims/{claimId}/confirmations:
-    post:
-      tags: [M5-Claim]
-      summary: 单方确认交接（FR-HANDOVER-01）
-      parameters: [ { name: claimId, in: path, required: true, schema: { type: string } } ]
+        schema:
+          type: integer
+          format: int64
       responses:
         '200':
-          description: 返回双方确认状态
+          description: OK；统一响应封装
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  claimStatus: { type: string }
-                  publisherConfirmed: { type: boolean }
-                  applicantConfirmed: { type: boolean }
-        '409': { description: HANDOVER_PAUSED_BY_DISPUTE }
-  /claims/{claimId}/cancel-handover:
-    post:
-      tags: [M5-Claim]
-      summary: 受控取消交接（FR-CLAIM-05）
-      parameters: [ { name: claimId, in: path, required: true, schema: { type: string } } ]
-      responses:
-        '200': { description: OK }
-        '404': { description: 非参与方亦 404（防枚举，裁决 R3） }
-        '409': { description: CLAIM_STATE_INVALID / HANDOVER_PAUSED_BY_DISPUTE（OPEN 争议冻结） }
-
-  # ---------------- V4 认领完成 → 寻物帖闭环链接（FR-POST-06） ----------------
-  /claims/{claimId}/resolved-candidates:
-    get:
-      tags: [M5-Claim]
-      summary: 认领完成后推荐可关联的寻物帖候选（FR-POST-06）
-      description: >
-        仅已完成（COMPLETED）认领的申请人可见；候选为申请人名下 LOST+ACTIVE 且类别/时间合理的帖，
-        按标题+公开描述的 unigram Jaccard 降序取前 3。非申请人一律 404（防枚举）。
-      parameters: [ { name: claimId, in: path, required: true, schema: { type: string } } ]
-      responses:
-        '200':
-          description: 候选列表
+                allOf:
+                - $ref: '#/components/schemas/ApiEnvelope'
+                - type: object
+                  properties:
+                    data:
+                      type: array
+                      items:
+                        $ref: '#/components/schemas/ClaimSummary'
+        '400':
+          description: 参数格式或业务校验失败
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/ResolvedCandidates' }
-        '404': { description: CLAIM_NOT_FOUND（含非申请人防枚举） }
-        '409': { description: CLAIM_NOT_COMPLETED }
-  /claims/{claimId}/resolve-lost:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '401':
+          description: 未登录或会话失效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '403':
+          description: 角色或账户受限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '404':
+          description: 不存在或无权访问
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '409':
+          description: 状态/唯一约束冲突
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
     post:
-      tags: [M5-Claim]
-      summary: 失主确认将寻物帖关联为"已找回"（FR-POST-06）
-      description: >
-        把申请人名下的一条 LOST 帖闭环为 COMPLETED 并回填 resolved_by_claim_id。
-        校验顺序即防枚举：参与方 → claim 完成 → 只能关联 LOST 帖 → 帖子归属 → 幂等/冲突 → 类别一致。
-        一个 claim 只能关联一条寻物帖（裁决 R4）。
-      parameters: [ { name: claimId, in: path, required: true, schema: { type: string } } ]
-      requestBody:
+      tags:
+      - M5-Claim
+      summary: 对 FOUND 发起认领（FR-CLAIM-01）
+      description: '幂等策略（裁决 R1）：重复提交由 DB 唯一约束 uk_claim_active_applicant + 状态条件更新保障， **未启用 Idempotency-Key 请求头**；idempotency_records
+        表为预留，当前未引用。
+
+        '
+      parameters:
+      - name: postId
+        in: path
         required: true
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/ResolveLostRequest' }
-      responses:
-        '200': { description: OK（已关联或幂等重复） }
-        '400': { description: INVALID_ARGUMENT（lostPostId 缺失/非 LOST 帖）/ RESOLVE_CATEGORY_MISMATCH }
-        '403': { description: RESOLVE_NOT_OWNER }
-        '404': { description: CLAIM_NOT_FOUND（含非申请人防枚举）/ POST_NOT_FOUND }
-        '409': { description: CLAIM_NOT_COMPLETED / RESOLVE_ALREADY_RESOLVED }
-
-  # ---------------- M6 沟通/线索/争议 ----------------
-  /claims/{claimId}/messages:
-    get:
-      tags: [M6-Message]
-      summary: 申请内留言（FR-MSG-01）
-      parameters: [ { name: claimId, in: path, required: true, schema: { type: string } } ]
-      responses: { '200': { description: 列表 } }
-    post:
-      tags: [M6-Message]
-      summary: 发送留言
-      parameters: [ { name: claimId, in: path, required: true, schema: { type: string } } ]
-      responses: { '201': { description: OK } }
-  /posts/{postId}/leads:
-    get:
-      tags: [M6-Lead]
-      summary: 寻物发布者查看线索（FR-LEAD-01）
-      parameters: [ { name: postId, in: path, required: true, schema: { type: string } } ]
-      responses: { '200': { description: 列表 } }
-    post:
-      tags: [M6-Lead]
-      summary: 对 LOST 提交线索（FR-LEAD-01）
-      parameters: [ { name: postId, in: path, required: true, schema: { type: string } } ]
-      responses: { '201': { description: OK } }
-  /leads/{leadId}:
-    get:
-      tags: [M6-Lead]
-      summary: 查看单条线索（线索提交者或寻物发布者，否则 404）
-      parameters: [ { name: leadId, in: path, required: true, schema: { type: string } } ]
-      responses: { '200': { description: OK }, '404': { description: 无权限亦 404 } }
-  /leads/{leadId}/review:
-    post:
-      tags: [M6-Lead]
-      summary: 寻物发布者处理线索（FR-LEAD-02）
-      parameters: [ { name: leadId, in: path, required: true, schema: { type: string } } ]
-      responses:
-        '200': { description: OK }
-        '409': { description: 非法状态转移（裁决 R8 白名单） }
-  /claims/{claimId}/disputes:
-    get:
-      tags: [M6-Dispute]
-      summary: 当事人查看争议（FR-DISPUTE-03）
-      parameters: [ { name: claimId, in: path, required: true, schema: { type: string } } ]
-      responses: { '200': { description: 列表 } }
-    post:
-      tags: [M6-Dispute]
-      summary: 发起争议（FR-DISPUTE-01）
-      parameters: [ { name: claimId, in: path, required: true, schema: { type: string } } ]
-      responses: { '201': { description: OK，创建后暂停交接完成 } }
-
-  # ---------------- M2 后台治理 ----------------
-  /admin/posts:
-    get: { tags: [M2-Admin], summary: 治理检索发布(FR-ADMIN-01), responses: { '200': { description: OK } } }
-  /admin/posts/{postId}/remove:
-    post:
-      tags: [M2-Admin]
-      summary: 下架（FR-ADMIN-01）
-      parameters: [ { name: postId, in: path, required: true, schema: { type: string } } ]
-      responses: { '200': { description: OK } }
-  /admin/posts/{postId}/restore:
-    post:
-      tags: [M2-Admin]
-      summary: 按规则恢复（FR-ADMIN-01）
-      parameters: [ { name: postId, in: path, required: true, schema: { type: string } } ]
-      responses: { '200': { description: OK } }
-  /admin/users:
-    get: { tags: [M2-Admin], summary: 治理检索用户(FR-ADMIN-02), responses: { '200': { description: OK } } }
-  /admin/users/{userId}/restrictions:
-    post:
-      tags: [M2-Admin]
-      summary: 限制用户（FR-ADMIN-02）
-      parameters: [ { name: userId, in: path, required: true, schema: { type: string } } ]
-      responses: { '200': { description: OK } }
-  /admin/users/{userId}/unrestrict:
-    post:
-      tags: [M2-Admin]
-      summary: 解除限制（FR-ADMIN-02）
-      parameters: [ { name: userId, in: path, required: true, schema: { type: string } } ]
-      responses: { '200': { description: OK } }
-  /admin/disputes:
-    get: { tags: [M2-Admin], summary: 争议列表(FR-DISPUTE-02), responses: { '200': { description: OK } } }
-  /admin/disputes/{disputeId}:
-    get:
-      tags: [M2-Admin]
-      summary: 受限查看争议（FR-DISPUTE-02）
-      parameters: [ { name: disputeId, in: path, required: true, schema: { type: string } } ]
-      responses: { '200': { description: OK } }
-  /admin/disputes/{disputeId}/assign:
-    post:
-      tags: [M2-Admin]
-      summary: 受理争议（受理后方可读取受限证据，FR-DISPUTE-02）
-      parameters: [ { name: disputeId, in: path, required: true, schema: { type: string } } ]
-      responses:
-        '200': { description: OK }
-        '409': { description: DISPUTE_NOT_OPEN }
-  /admin/disputes/{disputeId}/resolution:
-    post:
-      tags: [M2-Admin]
-      summary: 裁决争议（FR-DISPUTE-02）
-      parameters: [ { name: disputeId, in: path, required: true, schema: { type: string } } ]
+        schema:
+          type: integer
+          format: int64
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              required: [resolutionType, resolutionNote]
-              properties:
-                resolutionType: { type: string, enum: [CONTINUE, TERMINATE_REOPEN, CLOSE] }
-                resolutionNote: { type: string }
-      responses: { '200': { description: OK } }
-  /admin/audit-logs:
-    get: { tags: [M2-Admin], summary: 审计日志(FR-AUDIT-01), responses: { '200': { description: OK } } }
-  /admin/maintenance/backups:
-    get: { tags: [M2-Admin], summary: 备份记录(FR-BACKUP-01), responses: { '200': { description: OK } } }
-    post: { tags: [M2-Admin], summary: 触发授权备份(FR-BACKUP-01), responses: { '202': { description: 已受理 } } }
+              $ref: '#/components/schemas/SubmitClaimRequest'
+      responses:
+        '403':
+          description: SELF_CLAIM_FORBIDDEN
+        '409':
+          description: POST_NOT_CLAIMABLE / ACTIVE_CLAIM_EXISTS（重复认领兜底）
+        '200':
+          description: OK；统一响应封装
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/ApiEnvelope'
+                - type: object
+                  properties:
+                    data:
+                      $ref: '#/components/schemas/ClaimDetail'
+        '400':
+          description: 参数格式或业务校验失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '401':
+          description: 未登录或会话失效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '404':
+          description: 不存在或无权访问
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+  /claims/{claimId}:
+    get:
+      tags:
+      - M5-Claim
+      summary: 查看申请（本人/发布者）
+      parameters:
+      - name: claimId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      responses:
+        '200':
+          description: OK；统一响应封装
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/ApiEnvelope'
+                - type: object
+                  properties:
+                    data:
+                      $ref: '#/components/schemas/ClaimDetail'
+        '404':
+          description: 无权限亦 404
+        '400':
+          description: 参数格式或业务校验失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '401':
+          description: 未登录或会话失效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '403':
+          description: 角色或账户受限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '409':
+          description: 状态/唯一约束冲突
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+  /claims/{claimId}/withdraw:
+    post:
+      tags:
+      - M5-Claim
+      summary: 申请人撤销待审申请（FR-CLAIM-05）
+      parameters:
+      - name: claimId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      responses:
+        '200':
+          description: OK；统一响应封装
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/ApiEnvelope'
+                - type: object
+                  properties:
+                    data:
+                      type: object
+                      nullable: true
+                      description: 该操作data为null
+        '400':
+          description: 参数格式或业务校验失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '401':
+          description: 未登录或会话失效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '403':
+          description: 角色或账户受限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '404':
+          description: 不存在或无权访问
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '409':
+          description: 状态/唯一约束冲突
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+  /claims/{claimId}/review:
+    post:
+      tags:
+      - M5-Claim
+      summary: 发布者审核（FR-CLAIM-03/04）
+      parameters:
+      - name: claimId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReviewRequest'
+      responses:
+        '200':
+          description: OK；统一响应封装
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/ApiEnvelope'
+                - type: object
+                  properties:
+                    data:
+                      type: object
+                      nullable: true
+                      description: 该操作data为null
+        '409':
+          description: CLAIM_ACCEPT_CONFLICT
+        '400':
+          description: 参数格式或业务校验失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '401':
+          description: 未登录或会话失效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '403':
+          description: 角色或账户受限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '404':
+          description: 不存在或无权访问
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+  /claims/{claimId}/confirmations:
+    post:
+      tags:
+      - M5-Claim
+      summary: 单方确认交接（FR-HANDOVER-01）
+      parameters:
+      - name: claimId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      responses:
+        '200':
+          description: OK；统一响应封装
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/ApiEnvelope'
+                - type: object
+                  properties:
+                    data:
+                      $ref: '#/components/schemas/HandoverStatus'
+        '409':
+          description: HANDOVER_PAUSED_BY_DISPUTE
+        '400':
+          description: 参数格式或业务校验失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '401':
+          description: 未登录或会话失效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '403':
+          description: 角色或账户受限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '404':
+          description: 不存在或无权访问
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+  /claims/{claimId}/cancel-handover:
+    post:
+      tags:
+      - M5-Claim
+      summary: 受控取消交接（FR-CLAIM-05）
+      parameters:
+      - name: claimId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      responses:
+        '200':
+          description: OK；统一响应封装
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/ApiEnvelope'
+                - type: object
+                  properties:
+                    data:
+                      type: object
+                      nullable: true
+                      description: 该操作data为null
+        '404':
+          description: 非参与方亦 404（防枚举，裁决 R3）
+        '409':
+          description: CLAIM_STATE_INVALID / HANDOVER_PAUSED_BY_DISPUTE（OPEN 争议冻结）
+        '400':
+          description: 参数格式或业务校验失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '401':
+          description: 未登录或会话失效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '403':
+          description: 角色或账户受限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CancelHandoverRequest'
+  /claims/{claimId}/resolved-candidates:
+    get:
+      tags:
+      - M5-Claim
+      summary: 认领完成后推荐可关联的寻物帖候选（FR-POST-06）
+      description: '仅已完成（COMPLETED）认领的申请人可见；候选为申请人名下 LOST+ACTIVE 且类别/时间合理的帖， 按标题+公开描述的 unigram Jaccard 降序取前 3。非申请人一律
+        404（防枚举）。
 
+        '
+      parameters:
+      - name: claimId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      responses:
+        '200':
+          description: OK；统一响应封装
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/ApiEnvelope'
+                - type: object
+                  properties:
+                    data:
+                      $ref: '#/components/schemas/ResolvedCandidates'
+        '404':
+          description: CLAIM_NOT_FOUND（含非申请人防枚举）
+        '409':
+          description: CLAIM_NOT_COMPLETED
+        '400':
+          description: 参数格式或业务校验失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '401':
+          description: 未登录或会话失效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '403':
+          description: 角色或账户受限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+  /claims/{claimId}/resolve-lost:
+    post:
+      tags:
+      - M5-Claim
+      summary: 失主确认将寻物帖关联为"已找回"（FR-POST-06）
+      description: '把申请人名下的一条 LOST 帖闭环为 COMPLETED 并回填 resolved_by_claim_id。 校验顺序即防枚举：参与方 → claim 完成 → 只能关联 LOST
+        帖 → 帖子归属 → 幂等/冲突 → 类别一致。 一个 claim 只能关联一条寻物帖（裁决 R4）。
+
+        '
+      parameters:
+      - name: claimId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResolveLostRequest'
+      responses:
+        '200':
+          description: OK；统一响应封装
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/ApiEnvelope'
+                - type: object
+                  properties:
+                    data:
+                      type: object
+                      nullable: true
+                      description: 该操作data为null
+        '400':
+          description: INVALID_ARGUMENT（lostPostId 缺失/非 LOST 帖）/ RESOLVE_CATEGORY_MISMATCH
+        '403':
+          description: RESOLVE_NOT_OWNER
+        '404':
+          description: CLAIM_NOT_FOUND（含非申请人防枚举）/ POST_NOT_FOUND
+        '409':
+          description: CLAIM_NOT_COMPLETED / RESOLVE_ALREADY_RESOLVED
+        '401':
+          description: 未登录或会话失效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+  /claims/{claimId}/messages:
+    get:
+      tags:
+      - M6-Message
+      summary: 申请内留言（FR-MSG-01）
+      parameters:
+      - name: claimId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      responses:
+        '200':
+          description: OK；统一响应封装
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/ApiEnvelope'
+                - type: object
+                  properties:
+                    data:
+                      type: array
+                      items:
+                        $ref: '#/components/schemas/MessageItem'
+        '400':
+          description: 参数格式或业务校验失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '401':
+          description: 未登录或会话失效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '403':
+          description: 角色或账户受限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '404':
+          description: 不存在或无权访问
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '409':
+          description: 状态/唯一约束冲突
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+    post:
+      tags:
+      - M6-Message
+      summary: 发送留言
+      parameters:
+      - name: claimId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      responses:
+        '200':
+          description: OK；统一响应封装
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/ApiEnvelope'
+                - type: object
+                  properties:
+                    data:
+                      $ref: '#/components/schemas/MessageItem'
+        '400':
+          description: 参数格式或业务校验失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '401':
+          description: 未登录或会话失效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '403':
+          description: 角色或账户受限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '404':
+          description: 不存在或无权访问
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '409':
+          description: 状态/唯一约束冲突
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendMessageRequest'
+  /posts/{postId}/leads:
+    get:
+      tags:
+      - M6-Lead
+      summary: 寻物发布者查看线索（FR-LEAD-01）
+      parameters:
+      - name: postId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      responses:
+        '200':
+          description: OK；统一响应封装
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/ApiEnvelope'
+                - type: object
+                  properties:
+                    data:
+                      type: array
+                      items:
+                        $ref: '#/components/schemas/LeadItem'
+        '400':
+          description: 参数格式或业务校验失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '401':
+          description: 未登录或会话失效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '403':
+          description: 角色或账户受限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '404':
+          description: 不存在或无权访问
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '409':
+          description: 状态/唯一约束冲突
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+    post:
+      tags:
+      - M6-Lead
+      summary: 对 LOST 提交线索（FR-LEAD-01）
+      parameters:
+      - name: postId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      responses:
+        '200':
+          description: OK；统一响应封装
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/ApiEnvelope'
+                - type: object
+                  properties:
+                    data:
+                      $ref: '#/components/schemas/LeadItem'
+        '400':
+          description: 参数格式或业务校验失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '401':
+          description: 未登录或会话失效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '403':
+          description: 角色或账户受限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '404':
+          description: 不存在或无权访问
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '409':
+          description: 状态/唯一约束冲突
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubmitLeadRequest'
+  /leads/{leadId}:
+    get:
+      tags:
+      - M6-Lead
+      summary: 查看单条线索（线索提交者或寻物发布者，否则 404）
+      parameters:
+      - name: leadId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      responses:
+        '200':
+          description: OK；统一响应封装
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/ApiEnvelope'
+                - type: object
+                  properties:
+                    data:
+                      $ref: '#/components/schemas/LeadItem'
+        '404':
+          description: 无权限亦 404
+        '400':
+          description: 参数格式或业务校验失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '401':
+          description: 未登录或会话失效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '403':
+          description: 角色或账户受限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '409':
+          description: 状态/唯一约束冲突
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+  /leads/{leadId}/review:
+    post:
+      tags:
+      - M6-Lead
+      summary: 寻物发布者处理线索（FR-LEAD-02）
+      parameters:
+      - name: leadId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      responses:
+        '200':
+          description: OK；统一响应封装
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/ApiEnvelope'
+                - type: object
+                  properties:
+                    data:
+                      type: object
+                      nullable: true
+                      description: 该操作data为null
+        '409':
+          description: 非法状态转移（裁决 R8 白名单）
+        '400':
+          description: 参数格式或业务校验失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '401':
+          description: 未登录或会话失效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '403':
+          description: 角色或账户受限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '404':
+          description: 不存在或无权访问
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LeadReviewRequest'
+  /claims/{claimId}/disputes:
+    get:
+      tags:
+      - M6-Dispute
+      summary: 当事人查看争议（FR-DISPUTE-03）
+      parameters:
+      - name: claimId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      responses:
+        '200':
+          description: OK；统一响应封装
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/ApiEnvelope'
+                - type: object
+                  properties:
+                    data:
+                      type: array
+                      items:
+                        $ref: '#/components/schemas/DisputeView'
+        '400':
+          description: 参数格式或业务校验失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '401':
+          description: 未登录或会话失效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '403':
+          description: 角色或账户受限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '404':
+          description: 不存在或无权访问
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '409':
+          description: 状态/唯一约束冲突
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+    post:
+      tags:
+      - M6-Dispute
+      summary: 发起争议（FR-DISPUTE-01）
+      parameters:
+      - name: claimId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      responses:
+        '200':
+          description: OK；统一响应封装
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/ApiEnvelope'
+                - type: object
+                  properties:
+                    data:
+                      $ref: '#/components/schemas/DisputeView'
+        '400':
+          description: 参数格式或业务校验失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '401':
+          description: 未登录或会话失效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '403':
+          description: 角色或账户受限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '404':
+          description: 不存在或无权访问
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '409':
+          description: 状态/唯一约束冲突
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RaiseDisputeRequest'
+  /admin/posts:
+    get:
+      tags:
+      - M2-Admin
+      summary: 治理检索发布(FR-ADMIN-01)
+      responses:
+        '200':
+          description: OK；统一响应封装
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/ApiEnvelope'
+                - type: object
+                  properties:
+                    data:
+                      type: object
+                      required:
+                      - items
+                      - total
+                      - page
+                      - pageSize
+                      properties:
+                        items:
+                          type: array
+                          items:
+                            $ref: '#/components/schemas/Post'
+                        total:
+                          type: integer
+                          format: int64
+                        page:
+                          type: integer
+                          format: int32
+                        pageSize:
+                          type: integer
+                          format: int32
+        '400':
+          description: 参数格式或业务校验失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '401':
+          description: 未登录或会话失效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '403':
+          description: 角色或账户受限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '404':
+          description: 不存在或无权访问
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '409':
+          description: 状态/唯一约束冲突
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+      parameters:
+      - name: page
+        in: query
+        schema:
+          type: integer
+          default: 1
+          maximum: 100000
+      - name: pageSize
+        in: query
+        schema:
+          type: integer
+          default: 20
+          maximum: 100
+      - name: status
+        in: query
+        schema:
+          type: string
+      - name: type
+        in: query
+        schema:
+          type: string
+  /admin/posts/{postId}/remove:
+    post:
+      tags:
+      - M2-Admin
+      summary: 下架（FR-ADMIN-01）
+      parameters:
+      - name: postId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      responses:
+        '200':
+          description: OK；统一响应封装
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/ApiEnvelope'
+                - type: object
+                  properties:
+                    data:
+                      type: object
+                      nullable: true
+                      description: 该操作data为null
+        '400':
+          description: 参数格式或业务校验失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '401':
+          description: 未登录或会话失效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '403':
+          description: 角色或账户受限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '404':
+          description: 不存在或无权访问
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '409':
+          description: 状态/唯一约束冲突
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReasonRequest'
+  /admin/posts/{postId}/restore:
+    post:
+      tags:
+      - M2-Admin
+      summary: 按规则恢复（FR-ADMIN-01）
+      parameters:
+      - name: postId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      responses:
+        '200':
+          description: OK；统一响应封装
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/ApiEnvelope'
+                - type: object
+                  properties:
+                    data:
+                      type: object
+                      nullable: true
+                      description: 该操作data为null
+        '400':
+          description: 参数格式或业务校验失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '401':
+          description: 未登录或会话失效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '403':
+          description: 角色或账户受限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '404':
+          description: 不存在或无权访问
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '409':
+          description: 状态/唯一约束冲突
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReasonRequest'
+  /admin/users:
+    get:
+      tags:
+      - M2-Admin
+      summary: 治理检索用户(FR-ADMIN-02)
+      responses:
+        '200':
+          description: OK；统一响应封装
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/ApiEnvelope'
+                - type: object
+                  properties:
+                    data:
+                      type: object
+                      required:
+                      - items
+                      - total
+                      - page
+                      - pageSize
+                      properties:
+                        items:
+                          type: array
+                          items:
+                            $ref: '#/components/schemas/User'
+                        total:
+                          type: integer
+                          format: int64
+                        page:
+                          type: integer
+                          format: int32
+                        pageSize:
+                          type: integer
+                          format: int32
+        '400':
+          description: 参数格式或业务校验失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '401':
+          description: 未登录或会话失效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '403':
+          description: 角色或账户受限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '404':
+          description: 不存在或无权访问
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '409':
+          description: 状态/唯一约束冲突
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+      parameters:
+      - name: page
+        in: query
+        schema:
+          type: integer
+          default: 1
+          maximum: 100000
+      - name: pageSize
+        in: query
+        schema:
+          type: integer
+          default: 20
+          maximum: 100
+      - name: keyword
+        in: query
+        schema:
+          type: string
+  /admin/users/{userId}/restrictions:
+    post:
+      tags:
+      - M2-Admin
+      summary: 限制用户（FR-ADMIN-02）
+      parameters:
+      - name: userId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      responses:
+        '200':
+          description: OK；统一响应封装
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/ApiEnvelope'
+                - type: object
+                  properties:
+                    data:
+                      type: object
+                      nullable: true
+                      description: 该操作data为null
+        '400':
+          description: 参数格式或业务校验失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '401':
+          description: 未登录或会话失效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '403':
+          description: 角色或账户受限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '404':
+          description: 不存在或无权访问
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '409':
+          description: 状态/唯一约束冲突
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReasonRequest'
+  /admin/users/{userId}/unrestrict:
+    post:
+      tags:
+      - M2-Admin
+      summary: 解除限制（FR-ADMIN-02）
+      parameters:
+      - name: userId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      responses:
+        '200':
+          description: OK；统一响应封装
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/ApiEnvelope'
+                - type: object
+                  properties:
+                    data:
+                      type: object
+                      nullable: true
+                      description: 该操作data为null
+        '400':
+          description: 参数格式或业务校验失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '401':
+          description: 未登录或会话失效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '403':
+          description: 角色或账户受限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '404':
+          description: 不存在或无权访问
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '409':
+          description: 状态/唯一约束冲突
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReasonRequest'
+  /admin/disputes:
+    get:
+      tags:
+      - M2-Admin
+      summary: 争议列表(FR-DISPUTE-02)
+      responses:
+        '200':
+          description: OK；统一响应封装
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/ApiEnvelope'
+                - type: object
+                  properties:
+                    data:
+                      type: object
+                      required:
+                      - items
+                      - total
+                      - page
+                      - pageSize
+                      properties:
+                        items:
+                          type: array
+                          items:
+                            $ref: '#/components/schemas/AdminDisputeView'
+                        total:
+                          type: integer
+                          format: int64
+                        page:
+                          type: integer
+                          format: int32
+                        pageSize:
+                          type: integer
+                          format: int32
+        '400':
+          description: 参数格式或业务校验失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '401':
+          description: 未登录或会话失效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '403':
+          description: 角色或账户受限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '404':
+          description: 不存在或无权访问
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '409':
+          description: 状态/唯一约束冲突
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+      parameters:
+      - name: page
+        in: query
+        schema:
+          type: integer
+          default: 1
+          maximum: 100000
+      - name: pageSize
+        in: query
+        schema:
+          type: integer
+          default: 20
+          maximum: 100
+      - name: status
+        in: query
+        schema:
+          type: string
+  /admin/disputes/{disputeId}:
+    get:
+      tags:
+      - M2-Admin
+      summary: 受限查看争议（FR-DISPUTE-02）
+      parameters:
+      - name: disputeId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      responses:
+        '200':
+          description: OK；统一响应封装
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/ApiEnvelope'
+                - type: object
+                  properties:
+                    data:
+                      $ref: '#/components/schemas/AdminDisputeView'
+        '400':
+          description: 参数格式或业务校验失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '401':
+          description: 未登录或会话失效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '403':
+          description: 角色或账户受限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '404':
+          description: 不存在或无权访问
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '409':
+          description: 状态/唯一约束冲突
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+      description: 未受理管理员只得到列表级字段；description及证据仅当前受理管理员可见。
+  /admin/disputes/{disputeId}/assign:
+    post:
+      tags:
+      - M2-Admin
+      summary: 受理争议（受理后方可读取受限证据，FR-DISPUTE-02）
+      parameters:
+      - name: disputeId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      responses:
+        '200':
+          description: OK；统一响应封装
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/ApiEnvelope'
+                - type: object
+                  properties:
+                    data:
+                      type: object
+                      nullable: true
+                      description: 该操作data为null
+        '409':
+          description: DISPUTE_NOT_OPEN
+        '400':
+          description: 参数格式或业务校验失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '401':
+          description: 未登录或会话失效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '403':
+          description: 角色或账户受限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '404':
+          description: 不存在或无权访问
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+  /admin/disputes/{disputeId}/resolution:
+    post:
+      tags:
+      - M2-Admin
+      summary: 裁决争议（FR-DISPUTE-02）
+      parameters:
+      - name: disputeId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResolveRequest'
+      responses:
+        '200':
+          description: OK；统一响应封装
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/ApiEnvelope'
+                - type: object
+                  properties:
+                    data:
+                      type: object
+                      nullable: true
+                      description: 该操作data为null
+        '400':
+          description: 参数格式或业务校验失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '401':
+          description: 未登录或会话失效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '403':
+          description: 角色或账户受限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '404':
+          description: 不存在或无权访问
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '409':
+          description: 状态/唯一约束冲突
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+      description: 后端强制校验当前管理员为受理人，否则404。
+  /admin/audit-logs:
+    get:
+      tags:
+      - M2-Admin
+      summary: 审计日志(FR-AUDIT-01)
+      responses:
+        '200':
+          description: OK；统一响应封装
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/ApiEnvelope'
+                - type: object
+                  properties:
+                    data:
+                      type: object
+                      required:
+                      - items
+                      - total
+                      - page
+                      - pageSize
+                      properties:
+                        items:
+                          type: array
+                          items:
+                            $ref: '#/components/schemas/AuditLog'
+                        total:
+                          type: integer
+                          format: int64
+                        page:
+                          type: integer
+                          format: int32
+                        pageSize:
+                          type: integer
+                          format: int32
+        '400':
+          description: 参数格式或业务校验失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '401':
+          description: 未登录或会话失效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '403':
+          description: 角色或账户受限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '404':
+          description: 不存在或无权访问
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '409':
+          description: 状态/唯一约束冲突
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+      parameters:
+      - name: page
+        in: query
+        schema:
+          type: integer
+          default: 1
+          maximum: 100000
+      - name: pageSize
+        in: query
+        schema:
+          type: integer
+          default: 20
+          maximum: 100
+      - name: targetId
+        in: query
+        schema:
+          type: integer
+          format: int64
+      - name: targetType
+        in: query
+        schema:
+          type: string
+      - name: action
+        in: query
+        schema:
+          type: string
+  /admin/maintenance/backups:
+    get:
+      tags:
+      - M2-Admin
+      summary: 备份记录(FR-BACKUP-01)
+      responses:
+        '200':
+          description: OK；统一响应封装
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/ApiEnvelope'
+                - type: object
+                  properties:
+                    data:
+                      type: object
+                      required:
+                      - items
+                      - total
+                      - page
+                      - pageSize
+                      properties:
+                        items:
+                          type: array
+                          items:
+                            $ref: '#/components/schemas/BackupRecord'
+                        total:
+                          type: integer
+                          format: int64
+                        page:
+                          type: integer
+                          format: int32
+                        pageSize:
+                          type: integer
+                          format: int32
+        '400':
+          description: 参数格式或业务校验失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '401':
+          description: 未登录或会话失效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '403':
+          description: 角色或账户受限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '404':
+          description: 不存在或无权访问
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '409':
+          description: 状态/唯一约束冲突
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+      parameters:
+      - name: page
+        in: query
+        schema:
+          type: integer
+          default: 1
+          maximum: 100000
+      - name: pageSize
+        in: query
+        schema:
+          type: integer
+          default: 20
+          maximum: 100
+    post:
+      tags:
+      - M2-Admin
+      summary: 触发授权备份(FR-BACKUP-01)
+      responses:
+        '200':
+          description: OK；统一响应封装
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/ApiEnvelope'
+                - type: object
+                  properties:
+                    data:
+                      $ref: '#/components/schemas/BackupRecord'
+        '400':
+          description: 参数格式或业务校验失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '401':
+          description: 未登录或会话失效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '403':
+          description: 角色或账户受限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '404':
+          description: 不存在或无权访问
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '409':
+          description: 状态/唯一约束冲突
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+  /admin/posts/{postId}:
+    get:
+      tags:
+      - M2-Admin
+      summary: 发布公开详情、图片与治理历史
+      responses:
+        '200':
+          description: OK；统一响应封装
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/ApiEnvelope'
+                - type: object
+                  properties:
+                    data:
+                      $ref: '#/components/schemas/PostGovernanceDetail'
+        '400':
+          description: 参数格式或业务校验失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '401':
+          description: 未登录或会话失效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '403':
+          description: 角色或账户受限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '404':
+          description: 不存在或无权访问
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '409':
+          description: 状态/唯一约束冲突
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+      parameters:
+      - name: postId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
 components:
   securitySchemes:
     bearerAuth:
@@ -487,58 +3346,946 @@ components:
     ApiEnvelope:
       type: object
       properties:
-        code: { type: string, example: OK }
-        message: { type: string }
+        code:
+          type: string
+          example: OK
+        message:
+          type: string
         data: {}
-        requestId: { type: string, nullable: true }
-    PostCreate:
-      type: object
-      required: [type, title, category, publicDescription]
-      properties:
-        type: { type: string, enum: [LOST, FOUND] }
-        title: { type: string, maxLength: 128 }
-        category: { type: string, maxLength: 48 }
-        publicDescription: { type: string, maxLength: 2000 }
-        campus: { type: string, nullable: true, maxLength: 64 }
-        eventLocation: { type: string, nullable: true, maxLength: 128 }
-        eventTime: { type: string, format: date-time, nullable: true }
-        imageFileIds:
-          type: array
-          items: { type: string }
-    ClaimCreate:
-      type: object
-      required: [description]
-      properties:
-        description: { type: string, description: 私密证明文字（必填） }
-        evidenceFileIds:
-          type: array
-          items: { type: string }
+        requestId:
+          type: integer
+          nullable: true
+          format: int64
     MatchCandidate:
       type: object
       properties:
-        postId: { type: string }
-        score: { type: number, format: float }
+        postId:
+          type: integer
+          format: int64
+          nullable: true
+        type:
+          type: string
+          nullable: true
+        title:
+          type: string
+          nullable: true
+        category:
+          type: string
+          nullable: true
+        campus:
+          type: string
+          nullable: true
+        eventLocation:
+          type: string
+          nullable: true
+        eventTime:
+          type: string
+          format: date-time
+          description: UTC ISO 8601，响应带Z
+          nullable: true
+        score:
+          type: number
+          format: double
         reasons:
           type: array
-          items: { type: string }
-        preview: { type: object }
-    # ---- V4 认领完成 → 寻物帖闭环链接（FR-POST-06）----
+          items:
+            type: string
+        imageFileIds:
+          type: array
+          items:
+            type: integer
+            format: int64
     ResolvedCandidate:
       type: object
       properties:
-        id: { type: string }
-        title: { type: string }
-        campus: { type: string, nullable: true }
-        eventTime: { type: string, format: date-time, nullable: true }
-        overlap: { type: number, format: double, description: 标题+公开描述 unigram Jaccard（保留两位） }
+        id:
+          type: integer
+          format: int64
+          nullable: true
+        title:
+          type: string
+          nullable: true
+        campus:
+          type: string
+          nullable: true
+        eventTime:
+          type: string
+          format: date-time
+          description: UTC ISO 8601，响应带Z
+          nullable: true
+        overlap:
+          type: number
+          format: double
     ResolvedCandidates:
       type: object
       properties:
         items:
           type: array
-          items: { $ref: '#/components/schemas/ResolvedCandidate' }
+          items:
+            $ref: '#/components/schemas/ResolvedCandidate'
     ResolveLostRequest:
       type: object
-      required: [lostPostId]
       properties:
-        lostPostId: { type: string, description: 申请人名下待闭环的 LOST 帖 id }
+        lostPostId:
+          type: integer
+          format: int64
+          nullable: true
+    PostGovernanceDetail:
+      type: object
+      properties:
+        post:
+          $ref: '#/components/schemas/Post'
+        imageFileIds:
+          type: array
+          items:
+            type: integer
+            format: int64
+        history:
+          type: array
+          items:
+            $ref: '#/components/schemas/ModerationAction'
+    UserProfileResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          nullable: true
+        nickname:
+          type: string
+          nullable: true
+        campus:
+          type: string
+          nullable: true
+        avatarFileId:
+          type: integer
+          format: int64
+          nullable: true
+        status:
+          type: string
+          nullable: true
+        campusVerificationStatus:
+          type: string
+          nullable: true
+    UpdateProfileRequest:
+      type: object
+      properties:
+        nickname:
+          type: string
+          maxLength: 64
+          nullable: true
+        campus:
+          type: string
+          maxLength: 64
+          nullable: true
+        avatarFileId:
+          type: integer
+          format: int64
+          nullable: true
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        nickname:
+          type: string
+        campus:
+          type: string
+        avatarFileId:
+          type: integer
+          format: int64
+        status:
+          type: string
+        campusVerificationStatus:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+          description: UTC ISO 8601，响应带Z
+        updatedAt:
+          type: string
+          format: date-time
+          description: UTC ISO 8601，响应带Z
+    CreatePostRequest:
+      type: object
+      properties:
+        type:
+          type: string
+          enum:
+          - LOST
+          - FOUND
+        title:
+          type: string
+          maxLength: 128
+          minLength: 1
+        category:
+          type: string
+          maxLength: 48
+          minLength: 1
+        publicDescription:
+          type: string
+          maxLength: 2000
+          minLength: 1
+        campus:
+          type: string
+          maxLength: 64
+          nullable: true
+        eventLocation:
+          type: string
+          maxLength: 128
+          nullable: true
+        eventTime:
+          type: string
+          format: date-time
+          description: UTC ISO 8601，响应带Z
+          nullable: true
+        imageFileIds:
+          type: array
+          items:
+            type: integer
+            format: int64
+      required:
+      - type
+      - title
+      - category
+      - publicDescription
+    UpdatePostRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          maxLength: 128
+          nullable: true
+        category:
+          type: string
+          maxLength: 48
+          nullable: true
+        publicDescription:
+          type: string
+          maxLength: 2000
+          nullable: true
+        campus:
+          type: string
+          maxLength: 64
+          nullable: true
+        eventLocation:
+          type: string
+          maxLength: 128
+          nullable: true
+        eventTime:
+          type: string
+          format: date-time
+          description: UTC ISO 8601，响应带Z
+          nullable: true
+        imageFileIds:
+          type: array
+          items:
+            type: integer
+            format: int64
+    PostSummary:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          nullable: true
+        type:
+          type: string
+          nullable: true
+        title:
+          type: string
+          nullable: true
+        category:
+          type: string
+          nullable: true
+        campus:
+          type: string
+          nullable: true
+        eventLocation:
+          type: string
+          nullable: true
+        eventTime:
+          type: string
+          format: date-time
+          description: UTC ISO 8601，响应带Z
+          nullable: true
+        publishedAt:
+          type: string
+          format: date-time
+          description: UTC ISO 8601，响应带Z
+          nullable: true
+        status:
+          type: string
+          nullable: true
+        imageFileIds:
+          type: array
+          items:
+            type: integer
+            format: int64
+    PostDetail:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          nullable: true
+        type:
+          type: string
+          nullable: true
+        title:
+          type: string
+          nullable: true
+        category:
+          type: string
+          nullable: true
+        publicDescription:
+          type: string
+          nullable: true
+        campus:
+          type: string
+          nullable: true
+        eventLocation:
+          type: string
+          nullable: true
+        eventTime:
+          type: string
+          format: date-time
+          description: UTC ISO 8601，响应带Z
+          nullable: true
+        publishedAt:
+          type: string
+          format: date-time
+          description: UTC ISO 8601，响应带Z
+          nullable: true
+        status:
+          type: string
+          nullable: true
+        version:
+          type: integer
+          format: int32
+          nullable: true
+        publisherId:
+          type: integer
+          format: int64
+          nullable: true
+        publisherNickname:
+          type: string
+          nullable: true
+        mine:
+          type: boolean
+        imageFileIds:
+          type: array
+          items:
+            type: integer
+            format: int64
+    Post:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        publisherId:
+          type: integer
+          format: int64
+        type:
+          type: string
+        title:
+          type: string
+        category:
+          type: string
+        categoryCode:
+          type: string
+        publicDescription:
+          type: string
+        campus:
+          type: string
+        eventLocation:
+          type: string
+        eventTime:
+          type: string
+          format: date-time
+          description: UTC ISO 8601，响应带Z
+        publishedAt:
+          type: string
+          format: date-time
+          description: UTC ISO 8601，响应带Z
+        status:
+          type: string
+        version:
+          type: integer
+          format: int32
+        resolvedByClaimId:
+          type: integer
+          format: int64
+        closedAt:
+          type: string
+          format: date-time
+          description: UTC ISO 8601，响应带Z
+        createdAt:
+          type: string
+          format: date-time
+          description: UTC ISO 8601，响应带Z
+        updatedAt:
+          type: string
+          format: date-time
+          description: UTC ISO 8601，响应带Z
+    SendMessageRequest:
+      type: object
+      properties:
+        body:
+          type: string
+          minLength: 1
+      required:
+      - body
+    MessageItem:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          nullable: true
+        senderId:
+          type: integer
+          format: int64
+          nullable: true
+        mine:
+          type: boolean
+        body:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+          description: UTC ISO 8601，响应带Z
+          nullable: true
+        read:
+          type: boolean
+    SubmitLeadRequest:
+      type: object
+      properties:
+        body:
+          type: string
+          maxLength: 1000
+          minLength: 1
+        evidenceFileIds:
+          type: array
+          items:
+            type: integer
+            format: int64
+      required:
+      - body
+    LeadItem:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          nullable: true
+        lostPostId:
+          type: integer
+          format: int64
+          nullable: true
+        reporterId:
+          type: integer
+          format: int64
+          nullable: true
+        body:
+          type: string
+          nullable: true
+        status:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+          description: UTC ISO 8601，响应带Z
+          nullable: true
+        owner:
+          type: boolean
+        evidenceFileIds:
+          type: array
+          items:
+            type: integer
+            format: int64
+    ReceivedLeadItem:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        lostPostId:
+          type: integer
+          format: int64
+        postTitle:
+          type: string
+        reporterId:
+          type: integer
+          format: int64
+        body:
+          type: string
+        status:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+          description: UTC ISO 8601，响应带Z
+    RaiseDisputeRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+          minLength: 1
+        description:
+          type: string
+          maxLength: 2000
+          nullable: true
+        evidenceFileIds:
+          type: array
+          items:
+            type: integer
+            format: int64
+      required:
+      - reason
+    ResolveRequest:
+      type: object
+      properties:
+        resolutionType:
+          type: string
+          enum:
+          - CONTINUE
+          - TERMINATE_REOPEN
+          - CLOSE
+        resolutionNote:
+          type: string
+          maxLength: 500
+          minLength: 1
+      required:
+      - resolutionType
+      - resolutionNote
+    DisputeView:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          nullable: true
+        claimId:
+          type: integer
+          format: int64
+          nullable: true
+        reason:
+          type: string
+          nullable: true
+        status:
+          type: string
+          nullable: true
+        resolutionType:
+          type: string
+          nullable: true
+        resolutionNote:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+          description: UTC ISO 8601，响应带Z
+          nullable: true
+        resolvedAt:
+          type: string
+          format: date-time
+          description: UTC ISO 8601，响应带Z
+          nullable: true
+    AdminDisputeView:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          nullable: true
+        claimId:
+          type: integer
+          format: int64
+          nullable: true
+        raisedBy:
+          type: integer
+          format: int64
+          nullable: true
+        reason:
+          type: string
+          nullable: true
+        description:
+          type: string
+          nullable: true
+        status:
+          type: string
+          nullable: true
+        assignedAdminId:
+          type: integer
+          format: int64
+          nullable: true
+        resolutionType:
+          type: string
+          nullable: true
+        resolutionNote:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+          description: UTC ISO 8601，响应带Z
+          nullable: true
+        resolvedAt:
+          type: string
+          format: date-time
+          description: UTC ISO 8601，响应带Z
+          nullable: true
+        evidenceFileIds:
+          type: array
+          items:
+            type: integer
+            format: int64
+    SubmitClaimRequest:
+      type: object
+      properties:
+        description:
+          type: string
+          maxLength: 2000
+          minLength: 1
+        evidenceFileIds:
+          type: array
+          items:
+            type: integer
+            format: int64
+      required:
+      - description
+    ReviewRequest:
+      type: object
+      properties:
+        decision:
+          type: string
+          enum:
+          - ACCEPT
+          - REJECT
+        reason:
+          type: string
+          maxLength: 255
+          nullable: true
+      required:
+      - decision
+    ClaimSummary:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          nullable: true
+        postId:
+          type: integer
+          format: int64
+          nullable: true
+        applicantId:
+          type: integer
+          format: int64
+          nullable: true
+        status:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+          description: UTC ISO 8601，响应带Z
+          nullable: true
+        reviewedAt:
+          type: string
+          format: date-time
+          description: UTC ISO 8601，响应带Z
+          nullable: true
+        postTitle:
+          type: string
+          nullable: true
+    ClaimDetail:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          nullable: true
+        postId:
+          type: integer
+          format: int64
+          nullable: true
+        applicantId:
+          type: integer
+          format: int64
+          nullable: true
+        description:
+          type: string
+          nullable: true
+        status:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+          description: UTC ISO 8601，响应带Z
+          nullable: true
+        reviewReason:
+          type: string
+          nullable: true
+        reviewedAt:
+          type: string
+          format: date-time
+          description: UTC ISO 8601，响应带Z
+          nullable: true
+        acceptedAt:
+          type: string
+          format: date-time
+          description: UTC ISO 8601，响应带Z
+          nullable: true
+        completedAt:
+          type: string
+          format: date-time
+          description: UTC ISO 8601，响应带Z
+          nullable: true
+        publisherId:
+          type: integer
+          format: int64
+          nullable: true
+        applicant:
+          type: boolean
+        publisher:
+          type: boolean
+        applicantConfirmed:
+          type: boolean
+        publisherConfirmed:
+          type: boolean
+        resolvedLostPostId:
+          type: integer
+          format: int64
+          nullable: true
+        evidenceFileIds:
+          type: array
+          items:
+            type: integer
+            format: int64
+    HandoverStatus:
+      type: object
+      properties:
+        claimStatus:
+          type: string
+          nullable: true
+        publisherConfirmed:
+          type: boolean
+        applicantConfirmed:
+          type: boolean
+    ReceivedClaimItem:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        postId:
+          type: integer
+          format: int64
+        postTitle:
+          type: string
+        postType:
+          type: string
+        applicantId:
+          type: integer
+          format: int64
+        status:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+          description: UTC ISO 8601，响应带Z
+        reviewedAt:
+          type: string
+          format: date-time
+          description: UTC ISO 8601，响应带Z
+    BackupRecord:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        initiatedBy:
+          type: integer
+          format: int64
+        startedAt:
+          type: string
+          format: date-time
+          description: UTC ISO 8601，响应带Z
+        finishedAt:
+          type: string
+          format: date-time
+          description: UTC ISO 8601，响应带Z
+        status:
+          type: string
+        manifestPath:
+          type: string
+        checksum:
+          type: string
+        restoreVerifiedAt:
+          type: string
+          format: date-time
+          description: UTC ISO 8601，响应带Z
+        createdAt:
+          type: string
+          format: date-time
+          description: UTC ISO 8601，响应带Z
+    WechatLoginRequest:
+      type: object
+      properties:
+        code:
+          type: string
+          minLength: 1
+        nickname:
+          type: string
+          maxLength: 64
+          nullable: true
+      required:
+      - code
+    MockLoginRequest:
+      type: object
+      properties:
+        testUser:
+          type: string
+          maxLength: 64
+          minLength: 1
+        nickname:
+          type: string
+          maxLength: 64
+          nullable: true
+      required:
+      - testUser
+    AdminLoginRequest:
+      type: object
+      properties:
+        username:
+          type: string
+          minLength: 1
+        password:
+          type: string
+          minLength: 1
+      required:
+      - username
+      - password
+    LoginResponse:
+      type: object
+      properties:
+        accessToken:
+          type: string
+          nullable: true
+        userId:
+          type: integer
+          format: int64
+          nullable: true
+        role:
+          type: string
+          nullable: true
+        nickname:
+          type: string
+          nullable: true
+    CampusCapabilitiesResponse:
+      type: object
+      properties:
+        provider:
+          type: string
+          nullable: true
+        verificationEnabled:
+          type: boolean
+    AuditLog:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        actorId:
+          type: integer
+          format: int64
+        actorType:
+          type: string
+        action:
+          type: string
+        targetType:
+          type: string
+        targetId:
+          type: integer
+          format: int64
+        requestId:
+          type: integer
+          format: int64
+        result:
+          type: string
+        metadata:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+          description: UTC ISO 8601，响应带Z
+    ReasonRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+          minLength: 1
+      required:
+      - reason
+    ModerationAction:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        adminId:
+          type: integer
+          format: int64
+        targetType:
+          type: string
+        targetId:
+          type: integer
+          format: int64
+        action:
+          type: string
+        reason:
+          type: string
+        beforeState:
+          type: string
+        afterState:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+          description: UTC ISO 8601，响应带Z
+    UploadResult:
+      type: object
+      properties:
+        fileId:
+          type: integer
+          format: int64
+        mimeType:
+          type: string
+    Health:
+      type: object
+      additionalProperties: true
+    LeadReviewRequest:
+      type: object
+      required:
+      - status
+      properties:
+        status:
+          type: string
+          enum:
+          - VIEWED
+          - HELPFUL
+          - CLOSED
+    CancelHandoverRequest:
+      type: object
+      properties:
+        reason:
+          type: string

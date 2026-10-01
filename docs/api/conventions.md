@@ -132,3 +132,16 @@
 ## 7. OpenAPI
 - 权威契约由代码 springdoc 生成：运行期 `GET /api/v1/v3/api-docs`，UI `.../swagger-ui/index.html`。
 - 设计基线契约见 `openapi.yaml`（P1 初版，随实现同步）。
+
+## 终审整改补充
+
+- 当前Controller/OpenAPI有55个method+path操作、47个路径；新增 GET /admin/posts/{postId} 返回公开详情、图片ID及治理历史。
+- 所有JSON成功响应HTTP200并包裹ApiEnvelope；GET /files/{id}成功为原始图片字节。ID为JSON数值int64；当前OpenAPI完整响应schema可用于三方核对。
+- /auth/refresh必须有有效会话；新JWT含唯一jti，新会话签发后旧会话撤销；DISABLED账户存量token拒绝。
+- 文件下载允许匿名读取真正关联可公开帖子或有效头像的PUBLIC文件，未绑定/已下架/已撤回帖子文件仅owner/admin可读；私密文件按purpose、参与方与受理管理员校验。
+- 未受理管理员仅能看争议列表级字段，description与证据ID不公开；裁决必须为当前受理人，否则404。受理管理员可查看关联claim及PRIVATE_CLAIM证明。
+- 时间在应用和MySQL会话均按UTC写入；ISO8601偏移输入归一化UTC、输出带Z；旧无偏移输入兼容解释为UTC，前端日期选择转换本地时区后发送ISO时间。
+- 分页按时间与唯一id排序；audit-logs可增加targetId与targetType精确定位。
+- 交接写操作统一帖子→申请→争议的锁顺序，使用READ_COMMITTED且锁后重读；resolve-lost锁同一父帖/claim后检查既有链接，不添加幂等键。
+
+显式prod不可与dev/test/ci混用；CI登录回归仅在隔离测试库通过MOCK_LOGIN_ENABLED=true启用。

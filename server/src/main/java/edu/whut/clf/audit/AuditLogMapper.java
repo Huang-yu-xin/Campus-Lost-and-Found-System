@@ -21,13 +21,14 @@ public interface AuditLogMapper {
             <where>
               <if test="action != null and action != ''"> action = #{action} </if>
               <if test="targetType != null and targetType != ''"> AND target_type = #{targetType} </if>
+              <if test="targetId != null"> AND target_id = #{targetId} </if>
             </where>
-            ORDER BY created_at DESC
+            ORDER BY created_at DESC, id DESC
             LIMIT #{offset}, #{limit}
             </script>
             """)
     List<AuditLog> search(@Param("action") String action, @Param("targetType") String targetType,
-                          @Param("offset") long offset, @Param("limit") int limit);
+                          @Param("targetId") Long targetId, @Param("offset") long offset, @Param("limit") int limit);
 
     @Select("""
             <script>
@@ -35,8 +36,9 @@ public interface AuditLogMapper {
             <where>
               <if test="action != null and action != ''"> action = #{action} </if>
               <if test="targetType != null and targetType != ''"> AND target_type = #{targetType} </if>
+              <if test="targetId != null"> AND target_id = #{targetId} </if>
             </where>
             </script>
             """)
-    long count(@Param("action") String action, @Param("targetType") String targetType);
+    long count(@Param("action") String action, @Param("targetType") String targetType, @Param("targetId") Long targetId);
 }

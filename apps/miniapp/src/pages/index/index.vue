@@ -40,6 +40,7 @@
 </template>
 
 <script>
+import { localDateTime } from '../../utils/time'
 import { postApi, fileUrl } from '../../api/index'
 import { getToken } from '../../utils/request'
 
@@ -68,13 +69,22 @@ export default {
       }
     },
     async loadMore() {
-      this.page += 1; this.loading = true
+      if (this.loading || this.noMore) return
+      const seq = this._seq
+      const nextPage = this.page + 1
+      this.loading = true
       try {
-        const res = await postApi.list({ type: this.type, page: this.page, pageSize: this.pageSize })
+        const res = await postApi.list({ type: this.type, page: nextPage, pageSize: this.pageSize })
+        if (seq !== this._seq) return
         const items = res.items || []
         this.list = this.list.concat(items)
-        if (items.length < this.pageSize) this.noMore = true
-      } catch (e) { this.page -= 1 /* E10：失败回退页码 */ } finally { this.loading = false }
+        this.page = nextPage
+        this.noMore = items.length < this.pageSize
+      } catch (e) {
+        if (seq === this._seq) uni.showToast({ title: '加载更多失败，请重试', icon: 'none' })
+      } finally {
+        if (seq === this._seq) this.loading = false
+      }
     },
     switchType(t) { this.type = t; this.reload() },
     goSearch() { uni.navigateTo({ url: '/pages/search/search' }) },
@@ -83,7 +93,7 @@ export default {
       if (!getToken()) { uni.navigateTo({ url: '/pages/login/login' }); return }
       uni.navigateTo({ url: '/pages/publish/publish' })
     },
-    formatTime(t) { return t ? t.replace('T', ' ').slice(0, 16) : '未填写' }
+    formatTime(t) { return localDateTime(t) }
   }
 }
 </script>

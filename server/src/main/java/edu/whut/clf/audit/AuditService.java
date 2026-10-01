@@ -31,9 +31,13 @@ public class AuditService {
     }
 
     public PageResult<AuditLog> search(String action, String targetType, int page, int pageSize) {
+        return search(action, targetType, null, page, pageSize);
+    }
+
+    public PageResult<AuditLog> search(String action, String targetType, Long targetId, int page, int pageSize) {
         Pageable pg = Pageable.of(page, pageSize);
-        List<AuditLog> items = mapper.search(action, targetType, pg.offset(), pg.size());
-        long total = mapper.count(action, targetType);
+        List<AuditLog> items = mapper.search(action, targetType, targetId, pg.offset(), pg.size());
+        long total = mapper.count(action, targetType, targetId);
         return PageResult.of(items, total, pg.page(), pg.size());
     }
 }

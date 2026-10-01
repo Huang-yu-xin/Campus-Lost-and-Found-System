@@ -35,8 +35,8 @@ public class AdminDisputeController {
     @GetMapping("/{disputeId}")
     @Operation(summary = "受限查看争议（含证据）FR-DISPUTE-02")
     public ApiResponse<AdminDisputeView> get(@PathVariable Long disputeId) {
-        AuthContext.requireAdmin();
-        return ApiResponse.ok(disputeService.adminGet(disputeId));
+        Principal admin = AuthContext.requireAdmin();
+        return ApiResponse.ok(disputeService.adminGet(disputeId, admin.userId()));
     }
 
     @PostMapping("/{disputeId}/assign")

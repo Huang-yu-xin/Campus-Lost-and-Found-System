@@ -18,7 +18,7 @@
       <text class="lb">公开图片（最多6张，jpg/png/webp，单张≤5MB）</text>
       <view class="imgs">
         <view class="imgbox" v-for="(img, i) in images" :key="i">
-          <image class="img" :src="img.url" mode="aspectFill" @click="preview(i)" />
+          <image v-if="!failedImages[img.url]" class="img" :src="img.url" mode="aspectFill" @click="preview(i)" @error="failedImages[img.url] = true" /><view v-else class="img ph-img" />
           <text class="del" @click="removeImg(i)">×</text>
         </view>
         <view class="imgadd" v-if="images.length < 6" @click="chooseImage">＋</view>
@@ -27,11 +27,12 @@
 
     <view v-if="editId" class="tip">提示：存在有效申请后，类别/时间/地点/核心描述/图片不可修改。</view>
     <view v-else-if="form.type === 'FOUND'" class="tip">提示：请勿在公开描述里写出仅失主才知道的唯一性特征。</view>
-    <button class="btn primary" :loading="submitting" @click="submit">{{ editId ? '保存修改' : '发布' }}</button>
+    <button class="btn primary" :loading="submitting" :disabled="submitting" @click="submit">{{ editId ? '保存修改' : '发布' }}</button>
   </view>
 </template>
 
 <script>
+import { localDateBoundary, localDateTime } from '../../utils/time'
 import { postApi, uploadFile, fileUrl } from '../../api/index'
 import { pickCheckedImages } from '../../utils/image'
 
@@ -39,7 +40,7 @@ import { pickCheckedImages } from '../../utils/image'
 const CATEGORIES = ['雨伞', '校园卡', '钥匙', '耳机', '水杯', '手机', '钱包', '充电宝', '书本教材', '证件', '手表饰品', '衣物', '笔记本电脑', '眼镜', '其他']
 export default {
   data() {
-    return {
+    return { failedImages: {},
       editId: null,
       dateStr: '',
       submitting: false,
@@ -75,12 +76,12 @@ export default {
         type: d.type, title: d.title, category: d.category, publicDescription: d.publicDescription,
         campus: d.campus || '', eventLocation: d.eventLocation || '', eventTime: d.eventTime || null
       }
-      this.dateStr = d.eventTime ? d.eventTime.slice(0, 10) : ''
+      this.dateStr = d.eventTime ? localDateTime(d.eventTime).slice(0, 10) : ''
       this.images = (d.imageFileIds || []).map((fid) => ({ url: fileUrl(fid), fileId: fid }))
     },
     onDate(e) {
       this.dateStr = e.detail.value
-      this.form.eventTime = e.detail.value + 'T00:00:00'
+      this.form.eventTime = localDateBoundary(e.detail.value)
     },
     async chooseImage() {
       // E20：复用公共选图预检
@@ -98,7 +99,8 @@ export default {
       uni.previewImage({ current: urls[i], urls }) // E13：current 传字符串
     },
     async submit() {
-      if (!this.form.title || !this.form.category || !this.form.publicDescription) {
+      if (this.submitting) return
+      if (!this.form.title.trim() || !this.form.category.trim() || !this.form.publicDescription.trim()) {
         uni.showToast({ title: '请填写标题/类别/描述', icon: 'none' })
         return
       }
@@ -151,4 +153,5 @@ export default {
 .imgadd { width: 160rpx; height: 160rpx; margin: 8rpx; border: 1rpx dashed #c0c4cc; border-radius: 8rpx; text-align: center; line-height: 160rpx; font-size: 60rpx; color: #c0c4cc; }
 .tip { color: #e6a23c; font-size: 22rpx; margin: 16rpx 0; }
 .btn.primary { background: #2b6cb0; color: #fff; margin-top: 20rpx; }
+.ph-img { background: #ededed; }
 </style>

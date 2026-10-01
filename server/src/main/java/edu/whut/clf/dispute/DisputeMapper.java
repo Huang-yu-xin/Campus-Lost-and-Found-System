@@ -19,7 +19,13 @@ public interface DisputeMapper {
     @Select("SELECT * FROM disputes WHERE id = #{id}")
     Dispute findById(Long id);
 
-    @Select("SELECT * FROM disputes WHERE claim_id = #{claimId} ORDER BY created_at DESC")
+    @Select("SELECT * FROM disputes WHERE id = #{id} FOR UPDATE")
+    Dispute lockById(Long id);
+
+    @Select("SELECT COUNT(*) FROM disputes WHERE claim_id = #{claimId} AND assigned_admin_id = #{adminId}")
+    long countAssignedByClaim(@Param("claimId") Long claimId, @Param("adminId") Long adminId);
+
+    @Select("SELECT * FROM disputes WHERE claim_id = #{claimId} ORDER BY created_at DESC, id DESC")
     List<Dispute> findByClaim(Long claimId);
 
     @Select("SELECT COUNT(*) FROM disputes WHERE claim_id = #{claimId} AND status = 'OPEN'")
@@ -36,7 +42,7 @@ public interface DisputeMapper {
             <where>
               <if test="status != null and status != ''"> status = #{status} </if>
             </where>
-            ORDER BY created_at DESC
+            ORDER BY created_at DESC, id DESC
             LIMIT #{offset}, #{limit}
             </script>
             """)
@@ -55,7 +61,7 @@ public interface DisputeMapper {
     @Update("""
             UPDATE disputes SET status = #{status}, assigned_admin_id = #{adminId},
                    resolution_type = #{resolutionType}, resolution_note = #{note}, resolved_at = #{now}
-            WHERE id = #{id} AND status = 'OPEN'
+            WHERE id = #{id} AND status = 'OPEN' AND assigned_admin_id = #{adminId}
             """)
     int resolve(@Param("id") Long id, @Param("status") String status, @Param("adminId") Long adminId,
                 @Param("resolutionType") String resolutionType, @Param("note") String note,

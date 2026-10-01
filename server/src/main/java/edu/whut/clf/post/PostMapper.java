@@ -102,7 +102,7 @@ public interface PostMapper {
                      @Param("eventFrom") LocalDateTime eventFrom, @Param("eventTo") LocalDateTime eventTo);
 
     // ---- 我的发布（FR-POST-04）----
-    @Select("SELECT * FROM posts WHERE publisher_id = #{userId} ORDER BY created_at DESC LIMIT #{offset}, #{limit}")
+    @Select("SELECT * FROM posts WHERE publisher_id = #{userId} ORDER BY created_at DESC, id DESC LIMIT #{offset}, #{limit}")
     List<Post> findByPublisher(@Param("userId") Long userId, @Param("offset") long offset, @Param("limit") int limit);
 
     @Select("SELECT COUNT(*) FROM posts WHERE publisher_id = #{userId}")
@@ -172,7 +172,7 @@ public interface PostMapper {
               <if test="status != null and status != ''"> status = #{status} </if>
               <if test="type != null and type != ''"> AND type = #{type} </if>
             </where>
-            ORDER BY created_at DESC
+            ORDER BY created_at DESC, id DESC
             LIMIT #{offset}, #{limit}
             </script>
             """)

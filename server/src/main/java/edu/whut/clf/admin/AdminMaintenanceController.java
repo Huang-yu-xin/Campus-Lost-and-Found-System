@@ -31,10 +31,11 @@ public class AdminMaintenanceController {
     public ApiResponse<PageResult<AuditLog>> auditLogs(
             @RequestParam(required = false) String action,
             @RequestParam(required = false) String targetType,
+            @RequestParam(required = false) Long targetId,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int pageSize) {
         AuthContext.requireAdmin();
-        return ApiResponse.ok(auditService.search(action, targetType, page, pageSize));
+        return ApiResponse.ok(auditService.search(action, targetType, targetId, page, pageSize));
     }
 
     @GetMapping("/maintenance/backups")

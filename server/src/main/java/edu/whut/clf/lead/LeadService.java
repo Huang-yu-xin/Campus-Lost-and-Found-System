@@ -55,7 +55,7 @@ public class LeadService {
         this.auditService = auditService;
     }
 
-    @Transactional
+    @Transactional(isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
     public LeadItem submit(Long postId, Long userId, SubmitLeadRequest req) {
         userService.requireNotRestricted(userId);
         Post post = postService.getById(postId);
@@ -104,7 +104,7 @@ public class LeadService {
     public List<LeadItem> postLeads(Long postId, Long userId) {
         Post post = postService.getById(postId);
         if (!Objects.equals(post.getPublisherId(), userId)) {
-            throw BusinessException.of(ErrorCode.FORBIDDEN);
+            throw BusinessException.of(ErrorCode.LEAD_NOT_FOUND);
         }
         return leadMapper.findByPost(postId).stream().map(l -> toItem(l, true)).toList(); // 发布者视角 owner=true
     }
@@ -124,7 +124,7 @@ public class LeadService {
         return PageResult.of(items, total, pg.page(), pg.size());
     }
 
-    @Transactional
+    @Transactional(isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
     public void review(Long leadId, Long userId, String statusRaw) {
         LostLead lead = leadMapper.findById(leadId);
         if (lead == null) {
@@ -132,7 +132,7 @@ public class LeadService {
         }
         Post post = postService.getById(lead.getLostPostId());
         if (!Objects.equals(post.getPublisherId(), userId)) {
-            throw BusinessException.of(ErrorCode.FORBIDDEN);
+            throw BusinessException.of(ErrorCode.LEAD_NOT_FOUND);
         }
         LeadStatus target;
         try {
@@ -140,6 +140,8 @@ public class LeadService {
         } catch (Exception e) {
             throw new BusinessException(ErrorCode.INVALID_ARGUMENT, "非法线索状态");
         }
+        postService.lockForUpdate(post.getId());
+        lead = leadMapper.lockById(leadId);
         // D9/R8：按白名单校验状态转移（线索处理不擅自判定物品归属，仅记录处理进度）
         LeadStatus current;
         try {
@@ -151,7 +153,7 @@ public class LeadService {
             throw new BusinessException(ErrorCode.CONFLICT,
                     "线索状态不可从 " + current.name() + " 转为 " + target.name());
         }
-        leadMapper.updateStatus(leadId, target.name());
+        if (leadMapper.updateStatus(leadId, target.name(), lead.getStatus()) == 0) throw BusinessException.of(ErrorCode.CONFLICT);
         // D12/R9：线索处理审计（metadata 含新状态）
         auditService.record(userId, Principal.ROLE_USER, "LEAD_REVIEW", "LEAD", leadId,
                 "SUCCESS", "{\"status\":\"" + target.name() + "\"}");

@@ -115,8 +115,11 @@ class BatchDFixesIT {
         mvc.perform(get("/files/" + f.getId())).andExpect(status().isNotFound());
         // owner 访问 → 200
         mvc.perform(get("/files/" + f.getId()).header("Authorization", bearer(a))).andExpect(status().isOk());
-        // 绑定后 → 匿名可见
+        // 单独设置 bound 不能替代真实业务关联。
         fileService.markBound(f.getId());
+        mvc.perform(get("/files/" + f.getId())).andExpect(status().isNotFound());
+        fileService.markUnbound(f.getId());
+        postService.create(a, new CreatePostRequest("FOUND", "public photo", "wallet", "public", "S", "Lib", null, List.of(f.getId())));
         mvc.perform(get("/files/" + f.getId())).andExpect(status().isOk());
     }
 
@@ -163,7 +166,7 @@ class BatchDFixesIT {
     @Test
     void d8_futureEventTime_400() throws Exception {
         Long a = newUser("d8-a");
-        String future = LocalDateTime.now().plusDays(3).withNano(0).toString();
+        String future = LocalDateTime.now(java.time.Clock.systemUTC()).plusDays(3).withNano(0).toString();
         String body = "{\"type\":\"LOST\",\"title\":\"t\",\"category\":\"c\",\"publicDescription\":\"d\",\"eventTime\":\"" + future + "\"}";
         mvc.perform(post("/posts").header("Authorization", bearer(a))
                 .contentType("application/json").content(body))
@@ -247,11 +250,11 @@ class BatchDFixesIT {
     void d13_orphanFileCleanup() {
         Long a = newUser("d13-a");
         // 旧的未绑定文件（应删）
-        Long oldOrphan = insertFile(a, false, LocalDateTime.now().minusHours(48));
+        Long oldOrphan = insertFile(a, false, LocalDateTime.now(java.time.Clock.systemUTC()).minusHours(48));
         // 新的未绑定文件（应留）
-        Long freshOrphan = insertFile(a, false, LocalDateTime.now());
+        Long freshOrphan = insertFile(a, false, LocalDateTime.now(java.time.Clock.systemUTC()));
         // 旧的已绑定文件（应留）
-        Long oldBound = insertFile(a, true, LocalDateTime.now().minusHours(48));
+        Long oldBound = insertFile(a, true, LocalDateTime.now(java.time.Clock.systemUTC()).minusHours(48));
 
         fileService.cleanupOrphanFiles();
 
@@ -264,7 +267,7 @@ class BatchDFixesIT {
     void d13_backupZombieFailed() {
         Long admin = newUser("d13-bk");
         jdbc.update("INSERT INTO backup_records (initiated_by, started_at, status) VALUES (?, ?, 'RUNNING')",
-                admin, LocalDateTime.now().minusHours(2));
+                admin, LocalDateTime.now(java.time.Clock.systemUTC()).minusHours(2));
         Long id = jdbc.queryForObject("SELECT MAX(id) FROM backup_records", Long.class);
         backupService.failTimedOutRunning();
         String status = jdbc.queryForObject("SELECT status FROM backup_records WHERE id=?", String.class, id);
@@ -276,8 +279,8 @@ class BatchDFixesIT {
         Long a = newUser("d14-a");
         // 已撤销 + 创建超 30 天 → 应删
         jdbc.update("INSERT INTO sessions (user_id, token_hash, expires_at, revoked_at, created_at) VALUES (?,?,?,?,?)",
-                a, "stale-" + System.nanoTime(), LocalDateTime.now().minusDays(29),
-                LocalDateTime.now().minusDays(31), LocalDateTime.now().minusDays(31));
+                a, "stale-" + System.nanoTime(), LocalDateTime.now(java.time.Clock.systemUTC()).minusDays(29),
+                LocalDateTime.now(java.time.Clock.systemUTC()).minusDays(31), LocalDateTime.now(java.time.Clock.systemUTC()).minusDays(31));
         long before = jdbc.queryForObject("SELECT COUNT(*) FROM sessions WHERE user_id=?", Long.class, a);
         int removed = sessionService.purgeStaleSessions();
         long after = jdbc.queryForObject("SELECT COUNT(*) FROM sessions WHERE user_id=?", Long.class, a);

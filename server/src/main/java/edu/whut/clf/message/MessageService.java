@@ -31,7 +31,7 @@ public class MessageService {
     @Transactional
     public List<MessageItem> list(Long claimId, Long userId) {
         claimAccess.requireParticipant(claimId, userId);
-        messageMapper.markRead(claimId, userId, LocalDateTime.now());
+        messageMapper.markRead(claimId, userId, LocalDateTime.now(java.time.Clock.systemUTC()));
         return messageMapper.findByClaim(claimId).stream()
                 .map(m -> new MessageItem(m.getId(), m.getSenderId(),
                         m.getSenderId().equals(userId), m.getBody(), m.getCreatedAt(), m.getReadAt() != null))
@@ -54,6 +54,6 @@ public class MessageService {
         m.setSenderId(userId);
         m.setBody(trimmed);
         messageMapper.insert(m);
-        return new MessageItem(m.getId(), userId, true, trimmed, LocalDateTime.now(), false);
+        return new MessageItem(m.getId(), userId, true, trimmed, LocalDateTime.now(java.time.Clock.systemUTC()), false);
     }
 }

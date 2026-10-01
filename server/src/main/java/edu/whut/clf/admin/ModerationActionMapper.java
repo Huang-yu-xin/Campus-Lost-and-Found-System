@@ -13,11 +13,14 @@ public interface ModerationActionMapper {
     @Options(useGeneratedKeys = true, keyProperty = "id")
     int insert(ModerationAction action);
 
+    @Select("SELECT * FROM moderation_actions WHERE target_type = #{type} AND target_id = #{id} ORDER BY created_at DESC, id DESC")
+    java.util.List<ModerationAction> findByTarget(@Param("type") String type, @Param("id") Long id);
+
     /** 取某发布最近一次下架前状态（用于恢复参考）。 */
     @Select("""
             SELECT before_state FROM moderation_actions
             WHERE target_type = 'POST' AND target_id = #{postId} AND action = 'REMOVE'
-            ORDER BY created_at DESC LIMIT 1
+            ORDER BY created_at DESC, id DESC LIMIT 1
             """)
     String findLastRemovedBeforeState(Long postId);
 }

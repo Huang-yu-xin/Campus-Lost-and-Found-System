@@ -31,6 +31,7 @@ public class JwtService {
     public String issueAccessToken(Long userId, String role) {
         Instant now = Instant.now();
         return Jwts.builder()
+                .id(java.util.UUID.randomUUID().toString())
                 .subject(String.valueOf(userId))
                 .claim("role", role)
                 .issuedAt(Date.from(now))

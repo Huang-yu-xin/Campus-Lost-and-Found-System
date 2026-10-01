@@ -56,4 +56,15 @@ class StartupSecurityValidatorTest {
         var v = new StartupSecurityValidator(props(true, "dev-only-secret-change-me"), env);
         assertDoesNotThrow(v::validate);
     }
+
+    @Test
+    void explicitProdCannotBeExemptedByDevOrTest() {
+        for (String other : new String[]{"dev", "test", "ci"}) {
+            var env = new MockEnvironment();
+            env.setActiveProfiles("prod", other);
+            assertThrows(IllegalStateException.class, () -> new StartupSecurityValidator(props(true, strong), env).validate());
+            assertThrows(IllegalStateException.class, () -> new StartupSecurityValidator(props(false, "dev-only-secret-change-me"), env).validate());
+            assertThrows(IllegalStateException.class, () -> new StartupSecurityValidator(props(false, strong), env).validate());
+        }
+    }
 }

@@ -38,6 +38,7 @@ jobs:
           DB_USERNAME: root
           DB_PASSWORD: root
           SPRING_PROFILES_ACTIVE: ci
+          MOCK_LOGIN_ENABLED: "true"  # 隔离测试库中的登录回归
           CLF_IT: "true"     # 启用 @EnabledIfEnvironmentVariable 的真实 DB 集成/并发测试
         run: mvn -B -ntp verify
 
@@ -57,6 +58,9 @@ jobs:
       - name: Lint
         working-directory: apps/admin-web
         run: npm run lint --if-present
+      - name: Frontend regression
+        working-directory: apps/admin-web
+        run: npm test
       - name: Build
         working-directory: apps/admin-web
         run: npm run build
@@ -74,6 +78,9 @@ jobs:
       - name: Install
         working-directory: apps/miniapp
         run: npm ci
+      - name: Frontend regression
+        working-directory: apps/miniapp
+        run: npm test
       - name: Build mp-weixin
         working-directory: apps/miniapp
         run: npm run build:mp-weixin

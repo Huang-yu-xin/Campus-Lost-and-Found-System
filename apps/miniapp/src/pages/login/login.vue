@@ -24,22 +24,26 @@ import { setToken } from '../../utils/request'
 
 export default {
   data() {
-    return { testUser: '' }
+    return { testUser: '', loading: false }
   },
   methods: {
     async doMockLogin() {
+      if (this.loading) return
       if (!this.testUser) {
         uni.showToast({ title: '请输入测试用户名', icon: 'none' })
         return
       }
+      this.loading = true
       try {
         const res = await authApi.mockLogin(this.testUser, '')
         setToken(res.accessToken)
         uni.showToast({ title: '登录成功', icon: 'success' })
         setTimeout(() => uni.switchTab({ url: '/pages/index/index' }), 500)
-      } catch (e) { /* 已提示 */ }
+      } catch (e) { /* 已提示 */ } finally { this.loading = false }
     },
     doWechatLogin() {
+      if (this.loading) return
+      this.loading = true
       uni.login({
         provider: 'weixin',
         success: async (loginRes) => {
@@ -47,9 +51,9 @@ export default {
             const res = await authApi.wechatLogin(loginRes.code, '')
             setToken(res.accessToken)
             uni.switchTab({ url: '/pages/index/index' })
-          } catch (e) { /* 已提示（未配置 AppSecret 会返回不可用） */ }
+          } catch (e) { /* 已提示 */ } finally { this.loading = false }
         },
-        fail: () => uni.showToast({ title: '微信登录失败', icon: 'none' })
+        fail: () => { this.loading = false; uni.showToast({ title: '微信登录失败', icon: 'none' }) }
       })
     }
   }

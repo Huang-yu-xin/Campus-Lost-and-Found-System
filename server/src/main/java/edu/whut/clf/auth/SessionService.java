@@ -27,7 +27,7 @@ public class SessionService {
         Session s = new Session();
         s.setUserId(userId);
         s.setTokenHash(hash(rawToken));
-        s.setExpiresAt(LocalDateTime.now().plusMinutes(accessTtlMinutes));
+        s.setExpiresAt(LocalDateTime.now(java.time.Clock.systemUTC()).plusMinutes(accessTtlMinutes));
         sessionMapper.insert(s);
     }
 
@@ -35,19 +35,19 @@ public class SessionService {
         if (rawToken == null) {
             return;
         }
-        sessionMapper.revokeByHash(hash(rawToken), LocalDateTime.now());
+        sessionMapper.revokeByHash(hash(rawToken), LocalDateTime.now(java.time.Clock.systemUTC()));
     }
 
     public boolean isActive(String rawToken) {
         if (rawToken == null) {
             return false;
         }
-        return sessionMapper.countActive(hash(rawToken), LocalDateTime.now()) > 0;
+        return sessionMapper.countActive(hash(rawToken), LocalDateTime.now(java.time.Clock.systemUTC())) > 0;
     }
 
     /** D14/P2-13：清理创建超过 30 天且已失效（已撤销或已过期）的会话行。返回删除行数。 */
     public int purgeStaleSessions() {
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now(java.time.Clock.systemUTC());
         return sessionMapper.deleteStale(now.minusDays(30), now);
     }
 

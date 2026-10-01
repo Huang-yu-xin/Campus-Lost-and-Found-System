@@ -12,10 +12,11 @@
       <el-table-column prop="id" label="ID" width="70" />
       <el-table-column prop="nickname" label="昵称" />
       <el-table-column prop="campus" label="校区" width="120" />
-      <el-table-column prop="status" label="状态" width="120" />
-      <el-table-column prop="campusVerificationStatus" label="校园认证" width="120" />
-      <el-table-column label="操作" width="200">
+      <el-table-column :formatter="userStatusFormatter" prop="status" label="状态" width="120" />
+      <el-table-column :formatter="statusFormatter" prop="campusVerificationStatus" label="校园认证" width="120" />
+      <el-table-column label="操作" width="280">
         <template #default="{ row }">
+          <el-button size="small" @click="router.push({ path:'/audit', query:{targetType:'USER', targetId:row.id} })">审计记录</el-button>
           <el-button v-if="row.status !== 'RESTRICTED'" size="small" type="warning" @click="restrict(row)">限制</el-button>
           <el-button v-else size="small" type="success" @click="unrestrict(row)">解除</el-button>
         </template>
@@ -27,6 +28,10 @@
 </template>
 
 <script setup>
+import { useRouter } from 'vue-router'
+const router = useRouter()
+const userStatusFormatter = (row, column, value) => value === 'ACTIVE' ? '正常' : label(value)
+import { label, statusFormatter } from '../utils/labels'
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { adminApi } from '../api'

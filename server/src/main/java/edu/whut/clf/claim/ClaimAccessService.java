@@ -47,4 +47,13 @@ public class ClaimAccessService {
         }
         return p;
     }
+
+    /** 调用方必须在事务内；所有交接状态写操作遵守帖子→申请的锁顺序。 */
+    public Participants lockParticipant(Long claimId, Long userId) {
+        Participants initial = requireParticipant(claimId, userId);
+        Claim initialClaim = claimMapper.findById(claimId);
+        Post post = postMapper.lockById(initialClaim.getPostId());
+        Claim claim = claimMapper.lockById(claimId);
+        return new Participants(claimId, claim.getApplicantId(), post.getPublisherId(), claim.getStatus());
+    }
 }

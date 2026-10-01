@@ -3,7 +3,7 @@
 > 全量追踪：`FR/NFR → 负责人 → 设计 → API → 代码/模块 → 测试用例 → 状态`。
 > 状态：⬜ 未开始 / 🟡 已实现待验证 / 🟢 已实现+已验证 / ✅ 完成。
 > **进度更新（2026-09-29，P6 验收整改后）**：六模块后端 + 两端前端完成并在真实 MySQL 端到端验证。
-> 验证证据：`mvn verify`（19 单测 + ApiAuthzIT 8 + ClaimConcurrencyIT 1，全绿）；`tests/e2e/e2e-smoke.sh` PASS 31 / FAIL 0；
+> 验证证据：`mvn verify`（33 单测 + 64 项集成实跑，2 项手动评估另跑；当前记录见 P10）；`tests/e2e/e2e-smoke.sh` PASS 35 / FAIL 0；
 > 详见 `docs/reports/P6-remediation-report.md` 与 `docs/testing/test-report.md`。
 > 下表 🟢 表示有自动化或端到端证据；🟡 表示代码就绪但特定验证（性能压测/备份隔离恢复/微信真机）属外部条件待执行。
 
@@ -64,3 +64,6 @@
 | NFR-MAINT-01 可维护性 | 全员 | README | 新环境复现 | 🟢 |
 
 > 编码推进时同步更新本表状态列与代码文件路径。
+
+
+终审新增映射：NFR-CONS-01/TC-HANDOVER-02/TC-DISPUTE-01/V4-R4→FinalAcceptanceIT；NFR-PRIV-01→生产日志取证（P10）；NFR-UX-01→tests/frontend/regression.cjs；契约与治理历史→GET /admin/posts/{id}、OpenAPI和P10。旧映射不等于每一异常分支已实测。

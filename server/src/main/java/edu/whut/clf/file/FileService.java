@@ -32,6 +32,7 @@ public class FileService {
     private static final Logger orphanLog = LoggerFactory.getLogger(FileService.class);
 
     private final AppProperties props;
+    private final org.springframework.transaction.support.TransactionTemplate cleanupTransaction;
     private final FileMapper fileMapper;
     private final edu.whut.clf.user.UserMapper userMapper;
     private final List<FilePrivateAccessChecker> checkers;
@@ -40,8 +41,10 @@ public class FileService {
     // 直接注入 UserMapper（非 UserService）做受限校验：UserService 已依赖 FileService(A6 头像校验)，
     // 若再反向依赖 UserService 会形成循环；UserMapper 为叶子依赖，安全。
     public FileService(AppProperties props, FileMapper fileMapper,
-                       edu.whut.clf.user.UserMapper userMapper, List<FilePrivateAccessChecker> checkers) {
+                       edu.whut.clf.user.UserMapper userMapper, List<FilePrivateAccessChecker> checkers,
+                       org.springframework.transaction.PlatformTransactionManager transactionManager) {
         this.props = props;
+        this.cleanupTransaction = new org.springframework.transaction.support.TransactionTemplate(transactionManager);
         this.fileMapper = fileMapper;
         this.userMapper = userMapper;
         this.checkers = checkers;
@@ -86,7 +89,7 @@ public class FileService {
         String yearMonth = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMM"));
         String storageKey = yearMonth + "/" + UUID.randomUUID().toString().replace("-", "") + ext;
         try {
-            Path target = Paths.get(props.getFile().getStorageRoot()).resolve(storageKey);
+            Path target = storagePath(storageKey);
             Files.createDirectories(target.getParent());
             Files.write(target, content, StandardOpenOption.CREATE_NEW);
         } catch (IOException e) {
@@ -115,7 +118,7 @@ public class FileService {
             throw BusinessException.of(ErrorCode.NOT_FOUND);
         }
         try {
-            Path path = Paths.get(props.getFile().getStorageRoot()).resolve(file.getStorageKey());
+            Path path = storagePath(file.getStorageKey());
             byte[] bytes = Files.readAllBytes(path);
             return new LoadedFile(bytes, file.getMimeType());
         } catch (IOException e) {
@@ -127,14 +130,9 @@ public class FileService {
         if ("PUBLIC".equals(file.getVisibility())) {
             // D4(P2-4)：PUBLIC 但尚未绑定业务对象(bound=0)时仅 owner/admin 可见，
             // 避免"上传即公开"把未发布图片暴露给任意人（枚举面）
-            if (Boolean.TRUE.equals(file.getBound())) {
-                return true;
-            }
             Principal pub = AuthContext.current();
-            if (pub == null) {
-                return false;
-            }
-            return pub.isAdmin() || file.getOwnerId().equals(pub.userId());
+            if (pub != null && (pub.isAdmin() || file.getOwnerId().equals(pub.userId()))) return true;
+            return Boolean.TRUE.equals(file.getBound()) && fileMapper.publiclyVisible(file.getId());
         }
         Principal p = AuthContext.current();
         if (p == null) {
@@ -166,7 +164,7 @@ public class FileService {
      * 防止同一上传被绑定到多个业务对象。替换语义的更新流程须先 {@link #markUnbound} 释放旧文件。
      */
     public StoredFile requireOwnedFile(Long fileId, Long ownerId, FilePurpose expectedPurpose) {
-        StoredFile f = fileMapper.findById(fileId);
+        StoredFile f = fileMapper.lockById(fileId);
         if (f == null || !f.getOwnerId().equals(ownerId) || !f.getPurpose().equals(expectedPurpose.name())
                 || Boolean.TRUE.equals(f.getBound())) {
             throw BusinessException.of(ErrorCode.INVALID_EVIDENCE_FILE);
@@ -221,23 +219,29 @@ public class FileService {
      * 物理删除失败只记日志不中断（下次重试）；返回清理的行数。由定时任务调用。
      */
     public int cleanupOrphanFiles() {
-        java.time.LocalDateTime cutoff = java.time.LocalDateTime.now().minusHours(24);
-        List<StoredFile> orphans = fileMapper.findOrphans(cutoff);
+        var cutoff = java.time.LocalDateTime.now(java.time.Clock.systemUTC()).minusHours(24);
         int removed = 0;
-        for (StoredFile f : orphans) {
-            try {
-                Path p = Paths.get(props.getFile().getStorageRoot()).resolve(f.getStorageKey());
-                Files.deleteIfExists(p);
-            } catch (IOException e) {
-                orphanLog.warn("orphan cleanup: delete physical file failed id={} key={}", f.getId(), f.getStorageKey());
-            }
-            fileMapper.deleteById(f.getId());
-            removed++;
-        }
-        if (removed > 0) {
-            orphanLog.info("orphan cleanup: removed {} unbound file(s) older than 24h", removed);
+        for (StoredFile candidate : fileMapper.findOrphans(cutoff)) {
+            Boolean deleted = cleanupTransaction.execute(status -> {
+                StoredFile f = fileMapper.lockById(candidate.getId());
+                if (f == null || Boolean.TRUE.equals(f.getBound()) || !f.getCreatedAt().isBefore(cutoff)) return false;
+                try { Files.deleteIfExists(storagePath(f.getStorageKey())); }
+                catch (IOException e) {
+                    orphanLog.warn("orphan cleanup: physical delete failed id={}; retained for retry", f.getId());
+                    return false;
+                }
+                return fileMapper.deleteById(f.getId()) > 0;
+            });
+            if (Boolean.TRUE.equals(deleted)) removed++;
         }
         return removed;
+    }
+
+    private Path storagePath(String storageKey) {
+        Path root = Paths.get(props.getFile().getStorageRoot()).toAbsolutePath().normalize();
+        Path path = root.resolve(storageKey).normalize();
+        if (!path.startsWith(root)) throw BusinessException.of(ErrorCode.NOT_FOUND);
+        return path;
     }
 
     /** 依 magic bytes 识别图片真实类型；非图片返回 null。 */

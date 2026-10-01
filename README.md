@@ -4,7 +4,7 @@
 **发布信息 → 搜索 / 规则匹配 → 提供线索或申请认领 → 核验 / 沟通 → 双向交接 → 归还 / 找回 → 争议与治理**。
 
 > 三人软件工程课程项目（武汉理工大学）。学生端微信小程序 + Web 管理后台 + Spring Boot 单体后端。
-> 状态：P0–P3 全量实现并在真实 MySQL 端到端验证，验收整改 A/B/C/D/E 组已完成（见 [`docs/reports/P6-remediation-report.md`](docs/reports/P6-remediation-report.md)）。
+> 核心业务已实现，支持真实 MySQL 回归验证；运行范围与外部验证条件见[测试报告](docs/testing/test-report.md)。
 
 ---
 
@@ -13,10 +13,10 @@
 | 模块 | 能力 |
 |---|---|
 | **M1 用户与身份** | 微信登录（code2session）、受限测试登录、管理员登录、JWT + 服务端会话（可撤销 logout / refresh）、资料编辑、校园身份"未认证"展示、`CampusIdentityProvider` 扩展点（本期 disabled） |
-| **M2 后台治理** | 信息下架/恢复（保留原状态、关闭关联申请）、用户限制/解除、审计日志（可过滤）、备份（图片目录 + 清单 + 校验和）、后台总览统计 |
+| **M2 后台治理** | 信息详情与治理历史、下架/恢复（保留原状态、关闭关联申请）、用户限制/解除、按对象检索审计日志、备份（图片目录 + 清单 + 校验和）、后台总览统计 |
 | **M3 发布与浏览** | 发布/编辑/撤回 LOST 与 FOUND、有效申请后核心字段锁定、公开列表与详情、我的发布、安全图片上传（magic-byte 真类型校验 + 随机名 + 鉴权下载） |
-| **M4 检索与匹配** | 组合筛选（关键词/类型/类别/校区/日期）、双向候选匹配、可解释评分 `S = 0.40C + 0.25L + 0.20T + 0.15K`、同分稳定排序 |
-| **M5 认领与交接** | 提交/审核/撤销、**单活跃交接**（锁父发布 + 条件更新 + 生成列唯一索引）、双向确认、受控取消交接 |
+| **M4 检索与匹配** | 组合筛选（关键词/类型/类别/校区/日期）、双向候选匹配、可解释评分 `S = 0.40C + 0.25L + 0.30T + 0.05K`、同分稳定排序 |
+| **M5 认领与交接** | 提交/审核/撤销、**单活跃交接**（锁父发布 + 条件更新 + 生成列唯一索引）、双向确认、受控取消交接、完成后关联一条寻物帖 |
 | **M6 沟通与争议** | 申请内私密留言、寻物线索反馈与处理、争议发起、管理员受理 + 裁决（继续 / 终止重开 / 关闭），私密证据分级鉴权 |
 
 **安全红线**：所有权限由**后端逐资源强制**（不采信前端 `userId/role`）；私密证据无权访问统一 404；生产强制禁用测试登录并拒绝弱 JWT 密钥；规则匹配仅供参考，不证明物品归属；不接入真实校园认证。
@@ -28,9 +28,9 @@
 | 层 | 技术 |
 |---|---|
 | 学生端 | uni-app + Vue 3（构建目标：微信小程序），AppID 已接入 |
-| 管理后台 | Vue 3 + Element Plus + Vite + Vue Router + Pinia |
+| 管理后台 | Vue 3 + Element Plus + Vite + Vue Router |
 | 后端 | Spring Boot 3.3.5 · JDK 17 · MyBatis 3.0.3 · MySQL 8 · Flyway 10 · springdoc-openapi 2.6 · JWT(jjwt) · BCrypt |
-| 测试/CI | JUnit 5 · MockMvc · maven-surefire/failsafe · GitHub Actions |
+| 测试/CI | JUnit 5 · MockMvc · maven-surefire/failsafe · Node.js 前端行为回归 · GitHub Actions |
 
 ## 🗂️ 目录结构
 
@@ -41,10 +41,12 @@ campus-lost-found/
 │   └── admin-web/     # 管理后台 Vue3 / Element Plus
 ├── server/            # Spring Boot 单体后端（edu.whut.clf.*）
 ├── db/                # migrations 说明 / seeds 演示数据
-├── tests/e2e/         # e2e-smoke.sh 端到端冒烟脚本
+├── tests/
+│   ├── e2e/           # e2e-smoke.sh 端到端冒烟脚本
+│   └── frontend/      # 前端方法与请求行为回归
 ├── deploy/            # env.example / docker 预留
 ├── docs/              # 需求 / 架构 / API / 测试 / 运维 / 演示 / 贡献 / 阶段报告
-└── .github/workflows/ # CI（后端 verify + 两端 build）
+└── .github/workflows/ # CI（后端 verify + 前端测试 + 两端 build）
 ```
 
 ## 🏛️ 架构概览
@@ -88,7 +90,10 @@ cp deploy/env.example deploy/.env     # 填 DB 账号密码、JWT_SECRET、管�
 
 ### 3) 后端
 ```bash
-cd server && mvn spring-boot:run       # 端口 8080，前缀 /api/v1，Flyway 自动建表，dev 自动种子管理员
+cd server
+source ../deploy/.env
+export DB_PASSWORD="$DB_PASSWORD"
+mvn spring-boot:run                   # 端口 8080，前缀 /api/v1，Flyway 自动建表，dev 自动种子管理员
 # 健康检查   GET http://localhost:8080/api/v1/health
 # Swagger UI     http://localhost:8080/api/v1/swagger-ui/index.html
 ```
@@ -113,21 +118,39 @@ mysql -u <user> -p campus_lost_found < db/seeds/dev_seed.sql
 
 ## ✅ 测试
 
+以下命令在 Git Bash 中运行，先将 `JAVA_HOME` 和 `PATH` 切换至 JDK 17，并在 `deploy/.env` 中配置数据库和管理员凭据。
+
 ```bash
-# 单元测试（无需数据库）
-cd server && mvn test                                           # 19 tests
+# 仓库根目录：前端行为回归（无需启动服务）
+node --test tests/frontend/regression.cjs
 
-# 集成测试（真实 MySQL：并发 + 鉴权）
-CLF_IT=true DB_NAME=campus_lost_found_test mvn verify           # 19 单测 + 9 集成 (ApiAuthzIT 8 + ClaimConcurrencyIT 1)
+# 后端：单元测试与真实 MySQL 回归
+cd server
+source ../deploy/.env
+export DB_PASSWORD="$DB_PASSWORD"
+mvn test
+CLF_IT=true DB_NAME="$DB_TEST_NAME" mvn verify
+cd ..
 
-# 端到端冒烟（对运行中的 dev 服务器）
-source deploy/.env
-BASE=http://localhost:8080/api/v1 ADMIN_USER=$ADMIN_BOOTSTRAP_USERNAME ADMIN_PASS=$ADMIN_BOOTSTRAP_PASSWORD \
-  bash tests/e2e/e2e-smoke.sh                                   # PASS 31 / FAIL 0
+# 端到端冒烟：先启动 dev 后端
+BASE=http://localhost:8080/api/v1 ADMIN_USER="$ADMIN_BOOTSTRAP_USERNAME" ADMIN_PASS="$ADMIN_BOOTSTRAP_PASSWORD" \
+  bash tests/e2e/e2e-smoke.sh
+
+# 两端生产构建
+(cd apps/admin-web && npm run build)
+(cd apps/miniapp && npm run build:mp-weixin)
 ```
 
-已验证：核心闭环、单活跃交接并发、争议暂停/裁决、越权 403、下架 404、匹配评分、会话 refresh/logout。
-待外部条件：性能 P95 压测、微信真机（需合法域名）、备份隔离恢复实跑。
+回归包含双向确认、单活跃交接、争议冻结与裁决、资源权限、输入校验、UTC 时间、文件清理、稳定分页和会话撤销。当前执行记录及测试数量见[测试报告](docs/testing/test-report.md)，匹配评估见 [match-eval](docs/testing/match-eval/)。
+
+微信真机需配置合法 HTTPS 域名，并替换 `apps/miniapp/src/utils/config.js` 的生产域名占位符。数据库导出和隔离恢复由[离线运维脚本](docs/operations/backup-restore.md)完成，需在目标部署环境演练。已有性能测试记录不代表任意部署环境的性能保证。
+
+### 生产部署
+
+后端默认使用开发配置，**生产启动必须显式设置 `SPRING_PROFILES_ACTIVE=prod`**，禁止同时激活 dev/test/ci，禁用测试登录，并提供足够强的 `JWT_SECRET`。上传目录和备份目录应配置为独立持久化目录。生产关闭 Swagger。
+
+接口时间统一使用 UTC，响应带 `Z`，含偏移的输入转换为 UTC；小程序日期按设备本地时间展示。已有数据库若包含历史无时区时间，升级前须核对来源时区，按[部署文档](docs/operations/deployment.md)处理。
+
 
 ---
 
@@ -141,7 +164,7 @@ BASE=http://localhost:8080/api/v1 ADMIN_USER=$ADMIN_BOOTSTRAP_USERNAME ADMIN_PAS
 | [OpenAPI 契约](docs/api/openapi.yaml) · [错误码约定](docs/api/conventions.md) | 接口 |
 | [部署](docs/operations/deployment.md) · [备份恢复](docs/operations/backup-restore.md) | 运维 |
 | [演示脚本](docs/demo/demo-script.md) · [测试报告](docs/testing/test-report.md) | 演示 / 测试 |
-| [阶段报告 P0–P6](docs/reports/) · [风险与决策](docs/risks-and-decisions.md) | 过程与决策 |
+| [阶段报告](docs/reports/) · [风险与决策](docs/risks-and-decisions.md) | 过程与决策 |
 
 ---
 

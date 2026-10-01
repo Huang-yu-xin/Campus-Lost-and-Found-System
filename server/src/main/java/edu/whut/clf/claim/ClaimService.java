@@ -35,6 +35,7 @@ import java.util.Set;
 public class ClaimService {
 
     private final ClaimMapper claimMapper;
+    private final org.springframework.beans.factory.ObjectProvider<edu.whut.clf.dispute.DisputeMapper> disputeMapper;
     private final ClaimEvidenceFileMapper evidenceMapper;
     private final HandoverConfirmationMapper handoverMapper;
     private final PostService postService;
@@ -52,8 +53,10 @@ public class ClaimService {
                         UserService userService, FileService fileService,
                         AuditService auditService,
                         ObjectProvider<ClaimDisputeGuard> disputeGuard,
-                        TextTokenizer textTokenizer) {
+                        TextTokenizer textTokenizer,
+                        ObjectProvider<edu.whut.clf.dispute.DisputeMapper> disputeMapper) {
         this.claimMapper = claimMapper;
+        this.disputeMapper = disputeMapper;
         this.evidenceMapper = evidenceMapper;
         this.handoverMapper = handoverMapper;
         this.postService = postService;
@@ -64,10 +67,10 @@ public class ClaimService {
         this.textTokenizer = textTokenizer;
     }
 
-    @Transactional
+    @Transactional(isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
     public ClaimDetail submit(Long postId, Long userId, SubmitClaimRequest req) {
         userService.requireNotRestricted(userId);
-        Post post = postService.getById(postId);
+        Post post = postService.lockForUpdate(postId);
         if (!PostType.FOUND.name().equals(post.getType())
                 || !PostStatus.ACTIVE.name().equals(post.getStatus())) {
             throw BusinessException.of(ErrorCode.POST_NOT_CLAIMABLE);
@@ -108,16 +111,19 @@ public class ClaimService {
         Post post = postService.getById(claim.getPostId());
         boolean isApplicant = Objects.equals(claim.getApplicantId(), userId);
         boolean isPublisher = Objects.equals(post.getPublisherId(), userId);
-        if (!isApplicant && !isPublisher) {
+        boolean assignedAdmin = edu.whut.clf.common.security.AuthContext.current() != null
+                && edu.whut.clf.common.security.AuthContext.current().isAdmin()
+                && disputeMapper.getObject().countAssignedByClaim(claimId, userId) > 0;
+        if (!isApplicant && !isPublisher && !assignedAdmin) {
             // 无权者按 404 避免枚举
             throw BusinessException.of(ErrorCode.CLAIM_NOT_FOUND);
         }
         boolean applicantConfirmed = handoverMapper.exists(claimId, claim.getApplicantId()) > 0;
         boolean publisherConfirmed = handoverMapper.exists(claimId, post.getPublisherId()) > 0;
-        List<Long> evidence = isApplicant || isPublisher ? evidenceMapper.findFileIds(claimId) : List.of();
+        List<Long> evidence = isApplicant || isPublisher || assignedAdmin ? evidenceMapper.findFileIds(claimId) : List.of();
         Long resolvedLostPostId = postService.resolvedLostPostIdByClaim(claimId); // B7/R4 持久态
         return new ClaimDetail(claim.getId(), claim.getPostId(), claim.getApplicantId(), claim.getDescription(),
-                claim.getStatus(), claim.getReviewReason(), claim.getReviewedAt(), claim.getAcceptedAt(),
+                claim.getStatus(), claim.getCreatedAt(), claim.getReviewReason(), claim.getReviewedAt(), claim.getAcceptedAt(),
                 claim.getCompletedAt(), post.getPublisherId(), isApplicant, isPublisher,
                 applicantConfirmed, publisherConfirmed, resolvedLostPostId, evidence);
     }
@@ -141,14 +147,14 @@ public class ClaimService {
     public List<ClaimSummary> postClaims(Long postId, Long userId) {
         Post post = postService.getById(postId);
         if (!Objects.equals(post.getPublisherId(), userId)) {
-            throw BusinessException.of(ErrorCode.FORBIDDEN);
+            throw BusinessException.of(ErrorCode.CLAIM_NOT_FOUND);
         }
         return claimMapper.findByPost(postId).stream().map(this::toSummary).toList();
     }
 
-    @Transactional
+    @Transactional(isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
     public void withdraw(Long claimId, Long userId) {
-        Claim claim = claimMapper.findById(claimId);
+        Claim claim = lockClaim(claimId);
         if (claim == null) {
             throw BusinessException.of(ErrorCode.CLAIM_NOT_FOUND);
         }
@@ -161,21 +167,21 @@ public class ClaimService {
         }
     }
 
-    @Transactional
+    @Transactional(isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
     public void review(Long claimId, Long userId, ReviewRequest req) {
-        Claim claim = claimMapper.findById(claimId);
+        Claim claim = lockClaim(claimId);
         if (claim == null) {
             throw BusinessException.of(ErrorCode.CLAIM_NOT_FOUND);
         }
         Post post = postService.getById(claim.getPostId());
         if (!Objects.equals(post.getPublisherId(), userId)) {
-            throw BusinessException.of(ErrorCode.FORBIDDEN);
+            throw BusinessException.of(ErrorCode.CLAIM_NOT_FOUND);
         }
         if (!ClaimStatus.PENDING.name().equals(claim.getStatus())) {
             throw BusinessException.of(ErrorCode.CLAIM_NOT_PENDING);
         }
         String decision = req.decision() == null ? "" : req.decision().trim().toUpperCase();
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now(java.time.Clock.systemUTC());
         if ("REJECT".equals(decision)) {
             int n = claimMapper.reject(claimId, userId, req.reason(), now);
             if (n == 0) {
@@ -209,9 +215,9 @@ public class ClaimService {
                 "SUCCESS", "{\"decision\":\"ACCEPT\"}");
     }
 
-    @Transactional
+    @Transactional(isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
     public HandoverStatus confirmHandover(Long claimId, Long userId) {
-        Claim claim = claimMapper.findById(claimId);
+        Claim claim = lockClaim(claimId);
         if (claim == null) {
             throw BusinessException.of(ErrorCode.CLAIM_NOT_FOUND);
         }
@@ -220,6 +226,9 @@ public class ClaimService {
         boolean isPublisher = Objects.equals(post.getPublisherId(), userId);
         if (!isApplicant && !isPublisher) {
             throw BusinessException.of(ErrorCode.HANDOVER_NOT_PARTICIPANT);
+        }
+        if (ClaimStatus.COMPLETED.name().equals(claim.getStatus())) {
+            return new HandoverStatus(claim.getStatus(), true, true);
         }
         if (!ClaimStatus.WAITING_HANDOVER.name().equals(claim.getStatus())) {
             throw BusinessException.of(ErrorCode.CLAIM_STATE_INVALID);
@@ -237,7 +246,7 @@ public class ClaimService {
             if (hasOpenDispute(claimId)) {
                 throw BusinessException.of(ErrorCode.HANDOVER_PAUSED_BY_DISPUTE);
             }
-            int n = claimMapper.complete(claimId, LocalDateTime.now());
+            int n = claimMapper.complete(claimId, LocalDateTime.now(java.time.Clock.systemUTC()));
             if (n > 0) {
                 postService.requireTransition(post.getId(), PostStatus.HANDOVER, PostStatus.COMPLETED);
                 claimStatus = ClaimStatus.COMPLETED.name();
@@ -246,9 +255,9 @@ public class ClaimService {
         return new HandoverStatus(claimStatus, publisherConfirmed, applicantConfirmed);
     }
 
-    @Transactional
+    @Transactional(isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
     public void cancelHandover(Long claimId, Long userId, String reason) {
-        Claim claim = claimMapper.findById(claimId);
+        Claim claim = lockClaim(claimId);
         if (claim == null) {
             throw BusinessException.of(ErrorCode.CLAIM_NOT_FOUND);
         }
@@ -307,9 +316,10 @@ public class ClaimService {
      * 参与方 → claim 完成 → 帖子归属 → 幂等/冲突 → 类别一致 → 锁帖条件更新 → 审计。
      * 硬校验只有本人+ACTIVE+类别一致；时间合理仅用于推荐，不在此硬拦。
      */
-    @Transactional
+    @Transactional(isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
     public void resolveLost(Long claimId, Long userId, Long lostPostId) {
-        Claim claim = requireApplicantClaim(claimId, userId);          // 1. 参与方
+        Claim claim = lockClaim(claimId);
+        if (!Objects.equals(claim.getApplicantId(), userId)) throw BusinessException.of(ErrorCode.CLAIM_NOT_FOUND);
         requireClaimCompleted(claim);                                  // 2. claim 完成
         if (lostPostId == null) {
             throw new BusinessException(ErrorCode.INVALID_ARGUMENT, "lostPostId 必填");
@@ -353,6 +363,13 @@ public class ClaimService {
         // 7. 审计
         auditService.record(userId, Principal.ROLE_USER, "LOST_RESOLVED", "POST", lostPostId,
                 "SUCCESS", "{\"claimId\":" + claimId + "}");
+    }
+
+    private Claim lockClaim(Long claimId) {
+        Claim initial = claimMapper.findById(claimId);
+        if (initial == null) throw BusinessException.of(ErrorCode.CLAIM_NOT_FOUND);
+        postService.lockForUpdate(initial.getPostId());
+        return claimMapper.lockById(claimId);
     }
 
     private Claim requireApplicantClaim(Long claimId, Long userId) {
@@ -419,10 +436,11 @@ public class ClaimService {
 
     /** 把字符串安全编码为 JSON 值（null→null 字面量；转义引号与反斜杠），用于审计 metadata。 */
     private static String jsonString(String s) {
-        if (s == null) {
-            return "null";
+        try {
+            return new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(s);
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            throw new IllegalStateException("审计理由序列化失败", e);
         }
-        return "\"" + s.replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
     }
 
     private ClaimSummary toSummary(Claim c) {

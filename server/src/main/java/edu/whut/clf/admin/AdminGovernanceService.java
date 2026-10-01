@@ -25,6 +25,7 @@ import java.util.List;
 public class AdminGovernanceService {
 
     private final PostMapper postMapper;
+    private final edu.whut.clf.post.PostImageMapper imageMapper;
     private final ClaimMapper claimMapper;
     private final UserMapper userMapper;
     private final ModerationActionMapper moderationMapper;
@@ -33,8 +34,9 @@ public class AdminGovernanceService {
 
     public AdminGovernanceService(PostMapper postMapper, ClaimMapper claimMapper, UserMapper userMapper,
                                   ModerationActionMapper moderationMapper, DisputeMapper disputeMapper,
-                                  AuditService auditService) {
+                                  AuditService auditService, edu.whut.clf.post.PostImageMapper imageMapper) {
         this.postMapper = postMapper;
+        this.imageMapper = imageMapper;
         this.claimMapper = claimMapper;
         this.userMapper = userMapper;
         this.moderationMapper = moderationMapper;
@@ -51,9 +53,18 @@ public class AdminGovernanceService {
         return PageResult.of(items, total, pg.page(), pg.size());
     }
 
-    @Transactional
-    public void removePost(Long adminId, Long postId, String reason) {
+    public record PostGovernanceDetail(Post post, List<Long> imageFileIds, List<ModerationAction> history) {}
+
+    public PostGovernanceDetail postDetail(Long postId) {
         Post post = postMapper.findById(postId);
+        if (post == null) throw BusinessException.of(ErrorCode.POST_NOT_FOUND);
+        return new PostGovernanceDetail(post, imageMapper.findByPost(postId).stream()
+                .map(edu.whut.clf.post.model.PostImage::getFileId).toList(), moderationMapper.findByTarget("POST", postId));
+    }
+
+    @Transactional(isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
+    public void removePost(Long adminId, Long postId, String reason) {
+        Post post = postMapper.lockById(postId);
         if (post == null) {
             throw BusinessException.of(ErrorCode.POST_NOT_FOUND);
         }
@@ -70,12 +81,12 @@ public class AdminGovernanceService {
         // 关联有效申请一并关闭，保留历史
         claimMapper.closeActiveByPost(postId, "POST_REMOVED");
         logModeration(adminId, "POST", postId, "REMOVE", reason, before, PostStatus.REMOVED.name());
-        auditService.record(adminId, Principal.ROLE_ADMIN, "POST_REMOVE", "POST", postId, "SUCCESS", null);
+        auditService.record(adminId, Principal.ROLE_ADMIN, "POST_REMOVE", "POST", postId, "SUCCESS", reasonMetadata(reason));
     }
 
-    @Transactional
+    @Transactional(isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
     public void restorePost(Long adminId, Long postId, String reason) {
-        Post post = postMapper.findById(postId);
+        Post post = postMapper.lockById(postId);
         if (post == null) {
             throw BusinessException.of(ErrorCode.POST_NOT_FOUND);
         }
@@ -93,7 +104,7 @@ public class AdminGovernanceService {
         }
         postMapper.forceStatus(postId, target);
         logModeration(adminId, "POST", postId, "RESTORE", reason, PostStatus.REMOVED.name(), target);
-        auditService.record(adminId, Principal.ROLE_ADMIN, "POST_RESTORE", "POST", postId, "SUCCESS", null);
+        auditService.record(adminId, Principal.ROLE_ADMIN, "POST_RESTORE", "POST", postId, "SUCCESS", reasonMetadata(reason));
     }
 
     // ---- 用户治理 ----
@@ -105,7 +116,7 @@ public class AdminGovernanceService {
         return PageResult.of(items, total, pg.page(), pg.size());
     }
 
-    @Transactional
+    @Transactional(isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
     public void restrictUser(Long adminId, Long userId, String reason) {
         User u = userMapper.findById(userId);
         if (u == null) {
@@ -114,10 +125,10 @@ public class AdminGovernanceService {
         String before = u.getStatus();
         userMapper.updateStatus(userId, UserStatus.RESTRICTED.name());
         logModeration(adminId, "USER", userId, "RESTRICT", reason, before, UserStatus.RESTRICTED.name());
-        auditService.record(adminId, Principal.ROLE_ADMIN, "USER_RESTRICT", "USER", userId, "SUCCESS", null);
+        auditService.record(adminId, Principal.ROLE_ADMIN, "USER_RESTRICT", "USER", userId, "SUCCESS", reasonMetadata(reason));
     }
 
-    @Transactional
+    @Transactional(isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
     public void unrestrictUser(Long adminId, Long userId, String reason) {
         User u = userMapper.findById(userId);
         if (u == null) {
@@ -126,7 +137,12 @@ public class AdminGovernanceService {
         String before = u.getStatus();
         userMapper.updateStatus(userId, UserStatus.ACTIVE.name());
         logModeration(adminId, "USER", userId, "UNRESTRICT", reason, before, UserStatus.ACTIVE.name());
-        auditService.record(adminId, Principal.ROLE_ADMIN, "USER_UNRESTRICT", "USER", userId, "SUCCESS", null);
+        auditService.record(adminId, Principal.ROLE_ADMIN, "USER_UNRESTRICT", "USER", userId, "SUCCESS", reasonMetadata(reason));
+    }
+
+    private String reasonMetadata(String reason) {
+        try { return new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(java.util.Map.of("reason", reason)); }
+        catch (com.fasterxml.jackson.core.JsonProcessingException ex) { throw new IllegalStateException(ex); }
     }
 
     private void logModeration(Long adminId, String targetType, Long targetId, String action,

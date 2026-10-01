@@ -97,7 +97,7 @@ public class MatchEvalHarness {
     public Seed seed(long seed, int nPairs, int nDistractors, int nUsers) {
         cleanup();
         Random r = new Random(seed);
-        LocalDateTime now = LocalDateTime.now().withNano(0);
+        LocalDateTime now = LocalDateTime.now(java.time.Clock.systemUTC()).withNano(0);
 
         List<Long> userIds = new ArrayList<>();
         for (int i = 0; i < nUsers; i++) {
@@ -281,7 +281,7 @@ public class MatchEvalHarness {
     public void writeReport(Path out, String title, EvalResult e, String extra) {
         StringBuilder sb = new StringBuilder();
         sb.append("# ").append(title).append("\n\n");
-        sb.append("- 生成时间：").append(LocalDateTime.now().withNano(0)).append("\n");
+        sb.append("- 生成时间：").append(LocalDateTime.now(java.time.Clock.systemUTC()).withNano(0)).append("\n");
         sb.append("- 配置哈希：").append(configHash())
           .append("（wC=").append(cfg.getWCategory()).append(" wL=").append(cfg.getWLocation())
           .append(" wT=").append(cfg.getWTime()).append(" wK=").append(cfg.getWKeyword())

@@ -1,4 +1,6 @@
-# P9 报告——缺陷清零（最终清零轮）
+# P9 报告——缺陷清零（历史交付记录）
+
+> **原“66项全部闭合”结论已撤销。** 独立终审实测发现并发、安全及前端漏修；下文保留当时交付记录，不代表当前验收结论。整改与逐项复核见 [P10-report.md](P10-report.md)。
 
 > 执行日期：2026-10-01 · 分支：`main` · 依据：《校园失物招领系统_缺陷清零任务书.md》
 > 范围：最终穷尽审计 66 项（P0×1、P1×14、P2×51），按批次 A→C→B→D→E→F 执行，每批回归通过后单独 commit。
@@ -24,7 +26,7 @@
 | 项 | 命令 | 结果 |
 |---|---|---|
 | 单元测试 | `mvn test` | **Tests run: 30, Failures: 0, Errors: 0** ✅ |
-| 集成测试 | `CLF_IT=true DB_NAME=campus_lost_found_test mvn verify` | **Tests run: 49, Failures: 0, Errors: 0, Skipped: 2**（2 项为真实对评估开关 gated）✅ |
+| 集成测试 | `CLF_IT=true DB_NAME=campus_lost_found_test mvn verify` | **Tests run: 49, Failures: 0, Errors: 0, Skipped: 2**（分别为 sweep 与真实事实对评估 gated）✅ |
 | e2e smoke | 启动 dev 服务器后 `BASE=... ADMIN_USER=... ADMIN_PASS=... bash tests/e2e/e2e-smoke.sh` | **RESULT: PASS 33 / FAIL 0** ✅ |
 | 前端构建 | `apps/miniapp` `npm run build:mp-weixin` | **Build complete** ✅ |
 | 前端构建 | `apps/admin-web` `npm run build` | **built in ~6.5s** ✅ |
@@ -40,7 +42,7 @@
 
 ```text
 [x] A1–A6：P0+后端 P1 修复 + 回归用例（BatchAFixesIT 11）
-[x] C1–C2：openapi/conventions 与实现一致（Controller 54 端点 ↔ openapi 54 路径；ErrorCode 35 枚举全覆盖）
+[x] C1–C2：openapi/conventions 与实现一致（历史版本 Controller 54 个操作 ↔ openapi 54 个操作（46个路径）；ErrorCode 35 枚举全覆盖）
 [x] B1–B7：前端 P1 修复 + 后端配套（BatchBBackendIT 2）+ 手工验证
 [x] D1–D17：后端 P2 逐项闭合（BatchDFixesIT 13）
 [x] E1–E31：前端 P2 逐项闭合（BatchEBackendIT 2 + 双端构建）
@@ -72,7 +74,7 @@
 
 | # | 审计 | 闭合方式 | 改动文件 | 验证 |
 |---|---|---|---|---|
-| C1 | P1-D1 | openapi 补 V4 两端点 + schema + R1 幂等说明；补齐 leads/{id}、received-claims/received-leads、disputes/assign 缺口 | `docs/api/openapi.yaml` | 脚本对照 Controller 54 ↔ openapi 54 完全一致 |
+| C1 | P1-D1 | openapi 补 V4 两端点 + schema + R1 幂等说明；补齐 leads/{id}、received-claims/received-leads、disputes/assign 缺口 | `docs/api/openapi.yaml` | 脚本对照 历史版本54个method+path集合一致；不代表鉴权/响应schema全部一致 |
 | C2 | P1-D2 | conventions §4 改为全量错误码表，与 `ErrorCode.java` 35 枚举一一对应；§5 更新幂等口径 | `docs/api/conventions.md` | 脚本对照：缺失 0 |
 
 ### 3.3 B 批 — 前端 P1（7 项，commit `6156b0f`）

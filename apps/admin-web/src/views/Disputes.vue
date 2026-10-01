@@ -4,9 +4,9 @@
     <el-form :inline="true">
       <el-form-item label="状态">
         <el-select v-model="status" clearable placeholder="全部" style="width:140px" @change="reload">
-          <el-option label="OPEN" value="OPEN" />
-          <el-option label="RESOLVED" value="RESOLVED" />
-          <el-option label="CLOSED" value="CLOSED" />
+          <el-option label="待处理" value="OPEN" />
+          <el-option label="已裁决" value="RESOLVED" />
+          <el-option label="已关闭" value="CLOSED" />
         </el-select>
       </el-form-item>
       <el-button @click="reload">刷新</el-button>
@@ -16,7 +16,7 @@
       <el-table-column prop="id" label="ID" width="70" />
       <el-table-column prop="claimId" label="申请ID" width="90" />
       <el-table-column prop="reason" label="原因" />
-      <el-table-column prop="status" label="状态" width="110" />
+      <el-table-column :formatter="statusFormatter" prop="status" label="状态" width="110" />
       <el-table-column prop="assignedAdminId" label="受理人" width="90" />
       <el-table-column label="操作" width="160">
         <template #default="{ row }">
@@ -29,7 +29,7 @@
 
     <el-dialog v-model="dialog" title="争议详情与裁决" width="620px">
       <div v-if="current">
-        <p><b>争议ID：</b>{{ current.id }} · <b>申请ID：</b>{{ current.claimId }} · <b>状态：</b>{{ current.status }}</p>
+        <p><b>争议ID：</b>{{ current.id }} · <b>申请ID：</b>{{ current.claimId }} · <b>状态：</b>{{ label(current.status) }}</p>
         <p><b>原因：</b>{{ current.reason }}</p>
         <p><b>说明：</b>{{ current.description || '无' }}</p>
         <p><b>受理人：</b>{{ current.assignedAdminId || '未受理' }}</p>
@@ -46,6 +46,10 @@
           <span v-else>无</span>
         </div>
 
+        <div v-if="relatedClaim" style="margin-top:12px">
+          <b>关联认领证明：</b><p style="white-space:pre-wrap">{{ relatedClaim.description }}</p>
+          <el-button v-for="fid in relatedClaim.evidenceFileIds" :key="fid" @click="viewEvidence(fid)">查看原始证明 #{{ fid }}</el-button>
+        </div>
         <template v-if="current.status === 'OPEN'">
           <el-form label-width="90px" style="margin-top:12px">
             <el-form-item label="裁决">
@@ -64,7 +68,7 @@
       </div>
       <template #footer>
         <el-button @click="dialog = false">关闭</el-button>
-        <el-button v-if="current && current.status === 'OPEN'" type="primary" @click="resolve">提交裁决</el-button>
+        <el-button v-if="current && current.status === 'OPEN'" type="primary" :disabled="!assigned" @click="resolve">提交裁决</el-button>
       </template>
     </el-dialog>
 
@@ -73,6 +77,8 @@
 </template>
 
 <script setup>
+import { currentAdminId } from '../utils/labels'
+import { label, statusFormatter } from '../utils/labels'
 import { ref, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { adminApi, fetchFileObjectUrl } from '../api'
@@ -82,6 +88,7 @@ const loading = ref(false)
 const status = ref('OPEN')
 const dialog = ref(false)
 const current = ref(null)
+const relatedClaim = ref(null)
 const resolutionType = ref('CONTINUE')
 const note = ref('')
 const viewerUrl = ref('')
@@ -89,7 +96,7 @@ const page = ref(1)
 const total = ref(0)
 const pageSize = 20
 
-const assigned = computed(() => current.value && current.value.assignedAdminId != null)
+const assigned = computed(() => current.value && current.value.assignedAdminId === currentAdminId())
 const previewText = computed(() => ({
   CONTINUE: '结果：恢复交接，回到双方确认流程。',
   TERMINATE_REOPEN: '结果：本次交接关闭，招领重新开放可申请。',
@@ -107,15 +114,21 @@ async function load() {
 function reload() { page.value = 1; load() }
 function onPage(p) { page.value = p; load() }
 async function openDetail(id) {
-  current.value = await adminApi.getDispute(id)
-  resolutionType.value = 'CONTINUE'; note.value = ''
-  dialog.value = true
+  try {
+    current.value = await adminApi.getDispute(id)
+    relatedClaim.value = null
+    if (assigned.value) relatedClaim.value = await adminApi.getClaim(current.value.claimId)
+    resolutionType.value = 'CONTINUE'; note.value = ''
+    dialog.value = true
+  } catch (e) { ElMessage.error(e?.message || '争议详情加载失败，请重试') }
 }
+
 async function assign() {
   try {
     await adminApi.assignDispute(current.value.id)
     ElMessage.success('已受理')
     current.value = await adminApi.getDispute(current.value.id)
+    relatedClaim.value = await adminApi.getClaim(current.value.claimId)
     load()
   } catch (e) {
     ElMessage.error(e?.message || '受理失败')

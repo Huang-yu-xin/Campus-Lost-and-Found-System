@@ -1,16 +1,33 @@
 #!/usr/bin/env bash
-set -u
+set -euo pipefail
 BASE="${BASE:-http://localhost:8080/api/v1}"
 ADMIN_USER="${ADMIN_USER:?set ADMIN_USER}"
 ADMIN_PASS="${ADMIN_PASS:?set ADMIN_PASS}"
-RUN=$(date +%s)
+RUN=$(date +%s%N)
 PASS=0; FAIL=0
 
 jcode(){ python -c "import sys,json;print(json.load(sys.stdin).get('code'))" 2>/dev/null; }
 jfield(){ python -c "import sys,json;print(json.load(sys.stdin)['data']['$1'])" 2>/dev/null; }
 expect(){ local e="$1" a="${2:-}" l="${3:-}"; if [ "$a" = "$e" ]; then PASS=$((PASS+1)); echo "PASS  $l"; else FAIL=$((FAIL+1)); echo "FAIL  $l (expect $e, got '$a')"; fi; }
-post(){ local p=$1 t=$2 d="${3:-}"; if [ -n "$d" ]; then curl -s -X POST "$BASE$p" ${t:+-H "Authorization: Bearer $t"} -H "Content-Type: application/json" -d "$d"; else curl -s -X POST "$BASE$p" ${t:+-H "Authorization: Bearer $t"}; fi; }
-get(){ curl -s "$BASE$1" ${2:+-H "Authorization: Bearer $2"}; }
+# 同时检查HTTP状态与JSON.code。
+http(){
+  local raw
+  raw=$(curl --silent --show-error --write-out '\n%{http_code}' "$@")
+  printf '%s' "$raw" | python -c 'import sys,json
+raw=sys.stdin.read();body,status=raw.rsplit("\n",1);d=json.loads(body)
+expected={"INVALID_ARGUMENT": 400, "UNAUTHENTICATED": 401, "FORBIDDEN": 403, "NOT_FOUND": 404, "CONFLICT": 409, "RATE_LIMITED": 429, "INTERNAL_ERROR": 500, "MOCK_LOGIN_DISABLED": 403, "WECHAT_LOGIN_UNAVAILABLE": 503, "ADMIN_LOGIN_FAILED": 401, "USER_RESTRICTED": 403, "FILE_TOO_LARGE": 413, "UNSUPPORTED_MEDIA_TYPE": 415, "INVALID_EVIDENCE_FILE": 400, "POST_NOT_FOUND": 404, "POST_EDIT_LOCKED": 409, "POST_NOT_EDITABLE": 409, "SELF_CLAIM_FORBIDDEN": 403, "POST_NOT_CLAIMABLE": 409, "ACTIVE_CLAIM_EXISTS": 409, "CLAIM_NOT_FOUND": 404, "CLAIM_NOT_PENDING": 409, "CLAIM_ACCEPT_CONFLICT": 409, "CLAIM_STATE_INVALID": 409, "CLAIM_NOT_COMPLETED": 409, "RESOLVE_NOT_OWNER": 403, "RESOLVE_ALREADY_RESOLVED": 409, "RESOLVE_CATEGORY_MISMATCH": 400, "HANDOVER_PAUSED_BY_DISPUTE": 409, "HANDOVER_NOT_PARTICIPANT": 404, "LEAD_NOT_FOUND": 404, "POST_NOT_LOST": 409, "DISPUTE_NOT_FOUND": 404, "DISPUTE_OPEN_EXISTS": 409, "DISPUTE_NOT_OPEN": 409, "OK": 200}.get(d.get("code"))
+if expected is None or int(status)!=expected:
+ print("HTTP/code mismatch: "+status+" / "+str(d.get("code")),file=sys.stderr);sys.exit(1)
+print(body)'
+}
+post(){
+  local p=$1 t=$2 d="${3:-}"; local args=(-X POST "$BASE$p")
+  [ -z "$t" ] || args+=(-H "Authorization: Bearer $t")
+  [ -z "$d" ] || args+=(-H "Content-Type: application/json" -d "$d")
+  http "${args[@]}"
+}
+get(){ local args=("$BASE$1"); [ -z "${2:-}" ] || args+=(-H "Authorization: Bearer $2"); http "${args[@]}"; }
+has_item(){ local id=$1 key=${2:-id}; ID="$id" KEY="$key" python -c 'import sys,json,os;d=json.load(sys.stdin)["data"];items=d.get("items",[]) if isinstance(d,dict) else d;print("yes" if any(str(x.get(os.environ["KEY"]))==os.environ["ID"] for x in items) else "no")'; }
 
 echo "== smoke run #$RUN =="
 
@@ -42,7 +59,7 @@ expect HANDOVER "$(get "/posts/$FPID" "$TB" | python -c "import sys,json;print(j
 post "/claims/$CID/messages" "$TA" '{"body":"meet 3pm"}' > /dev/null
 expect CLAIM_NOT_FOUND "$(get "/claims/$CID/messages" "$TC" | jcode)" "FR-MSG-01 stranger 404"
 # 6b 收到的申请聚合（B10）
-expect OK "$(get "/users/me/received-claims" "$TB" | jcode)" "B10 received-claims"
+expect yes "$(get "/users/me/received-claims" "$TB" | has_item "$CID")" "B10 received-claims contains submitted claim"
 # 7 争议暂停
 DID=$(post "/claims/$CID/disputes" "$TA" '{"reason":"WRONG_ITEM","description":"not mine"}' | jfield id)
 expect HANDOVER_PAUSED_BY_DISPUTE "$(post "/claims/$CID/confirmations" "$TA" | jcode)" "TC-DISPUTE-01 pause"
@@ -64,8 +81,8 @@ expect COMPLETED "$(get "/posts/$LPID" "$TA" | python -c "import sys,json;print(
 # 10 mark-found / 审计 / 限制（LPID 已由 resolve-lost 闭环，这里另发一条未关联的 LOST 验证手动标记）
 LPID2=$(post /posts "$TA" "{\"type\":\"LOST\",\"title\":\"Lost umbrella $RUN\",\"category\":\"umbrella\",\"publicDescription\":\"my umbrella\",\"campus\":\"S\",\"eventLocation\":\"Lib\",\"eventTime\":\"2026-09-27T13:00:00Z\",\"imageFileIds\":[]}" | jfield id)
 expect OK "$(post "/posts/$LPID2/mark-found" "$TA" | jcode)" "TC-POST-05 mark found"
-expect OK "$(get "/admin/audit-logs?action=DISPUTE_RESOLVE" "$AT" | jcode)" "FR-AUDIT-01 audit filter"
-expect OK "$(get "/admin/audit-logs?action=CLAIM_REVIEW" "$AT" | jcode)" "B1 claim-review audit"
+expect yes "$(get "/admin/audit-logs?action=DISPUTE_RESOLVE&targetType=DISPUTE&targetId=$DID" "$AT" | has_item "$DID" targetId)" "FR-AUDIT-01 exact dispute resolution audit"
+expect yes "$(get "/admin/audit-logs?action=CLAIM_REVIEW&targetType=CLAIM&targetId=$CID" "$AT" | has_item "$CID" targetId)" "B1 exact claim-review audit"
 UIDC=$(get /users/me "$TC" | jfield id)
 post "/admin/users/$UIDC/restrictions" "$AT" '{"reason":"smoke"}' > /dev/null
 expect USER_RESTRICTED "$(post /posts "$TC" "{\"type\":\"LOST\",\"title\":\"r\",\"category\":\"o\",\"publicDescription\":\"x\",\"eventTime\":\"2026-09-27T10:00:00Z\",\"imageFileIds\":[]}" | jcode)" "TC-ADMIN-02 restricted publish"
@@ -75,18 +92,22 @@ post "/admin/users/$UIDA/restrictions" "$AT" '{"reason":"smoke-msg"}' > /dev/nul
 expect USER_RESTRICTED "$(post "/claims/$CID/messages" "$TA" '{"body":"hi"}' | jcode)" "B2 restricted participant message"
 post "/admin/users/$UIDA/unrestrict" "$AT" '{"reason":"smoke"}' > /dev/null
 # 11 私密文件
-python -c "open('smoke.png','wb').write(b'\x89PNG\r\n\x1a\n'+b'\x00'*56)"
-FID=$(curl -s -X POST "$BASE/files" -H "Authorization: Bearer $TA" -F "file=@smoke.png;type=image/png" -F "purpose=PRIVATE_CLAIM" | jfield fileId)
+SMOKE_IMAGE=$(mktemp "${TMPDIR:-/tmp}/clf-smoke.XXXXXX.png")
+trap 'rm -f -- "$SMOKE_IMAGE"' EXIT
+python -c "import sys;open(sys.argv[1],'wb').write(b'\x89PNG\r\n\x1a\n'+b'\x00'*56)" "$SMOKE_IMAGE"
+SMOKE_IMAGE_NATIVE=$(python -c "import os,sys;print(os.path.abspath(sys.argv[1]).replace(chr(92),'/'))" "$SMOKE_IMAGE")
+FID=$(http -X POST "$BASE/files" -H "Authorization: Bearer $TA" -F "file=@$SMOKE_IMAGE_NATIVE;type=image/png" -F "purpose=PRIVATE_CLAIM" | jfield fileId)
 curl -s -o /dev/null -w "%{http_code}" "$BASE/files/$FID" -H "Authorization: Bearer $TC" | grep -q 404 && expect OK OK "TC-FILE-01 stranger 404" || expect OK bad "TC-FILE-01 stranger 404"
 curl -s -o /dev/null -w "%{http_code}" "$BASE/files/$FID" -H "Authorization: Bearer $TA" | grep -q 200 && expect OK OK "owner fetch 200" || expect OK bad "owner fetch 200"
-rm -f smoke.png
 # 12 错误码
 curl -s -o /dev/null -w "%{http_code}" "$BASE/nonexistent" | grep -q 404 && expect OK OK "B5 unknown route 404" || expect OK bad "B5 unknown route 404"
 # 13 会话生命周期（B3）
 NT=$(post /auth/refresh "$TA" | jfield accessToken)
-[ -n "$NT" ] && expect OK OK "B3 refresh issues new token" || expect OK missing "B3 refresh issues new token"
-post /auth/logout "$TA" > /dev/null
-expect UNAUTHENTICATED "$(get /users/me "$TA" | jcode)" "B3 logout revokes session"
+[ -n "$NT" ] && [ "$NT" != "$TA" ] && expect OK OK "B3 refresh issues distinct token" || expect OK missing "B3 refresh issues distinct token"
+expect UNAUTHENTICATED "$(get /users/me "$TA" | jcode)" "refresh revokes old session"
+expect OK "$(get /users/me "$NT" | jcode)" "refreshed token works"
+post /auth/logout "$NT" > /dev/null
+expect UNAUTHENTICATED "$(get /users/me "$NT" | jcode)" "B3 logout revokes session"
 
 echo "== RESULT: PASS $PASS / FAIL $FAIL =="
 [ "$FAIL" = "0" ]

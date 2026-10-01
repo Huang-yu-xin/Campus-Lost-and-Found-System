@@ -33,7 +33,7 @@ public interface UserMapper {
             <where>
               <if test="keyword != null and keyword != ''"> nickname LIKE CONCAT('%', #{keyword}, '%') </if>
             </where>
-            ORDER BY created_at DESC
+            ORDER BY created_at DESC, id DESC
             LIMIT #{offset}, #{limit}
             </script>
             """)

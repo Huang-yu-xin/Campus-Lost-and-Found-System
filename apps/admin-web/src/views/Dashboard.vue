@@ -11,11 +11,11 @@
     <el-card style="margin-top:16px">
       <template #header>最近操作动态</template>
       <el-table :data="recent" v-loading="loading" size="small">
-        <el-table-column prop="actorType" label="操作者" width="90" />
-        <el-table-column prop="action" label="动作" width="170" />
-        <el-table-column prop="targetType" label="对象" width="100" />
+        <el-table-column :formatter="statusFormatter" prop="actorType" label="操作者" width="90" />
+        <el-table-column :formatter="statusFormatter" prop="action" label="动作" width="170" />
+        <el-table-column :formatter="statusFormatter" prop="targetType" label="对象" width="100" />
         <el-table-column prop="targetId" label="ID" width="90" />
-        <el-table-column prop="result" label="结果" width="90" />
+        <el-table-column :formatter="statusFormatter" prop="result" label="结果" width="90" />
         <el-table-column prop="createdAt" label="时间" />
       </el-table>
     </el-card>
@@ -23,6 +23,7 @@
 </template>
 
 <script setup>
+import { label, statusFormatter } from '../utils/labels'
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { adminApi } from '../api'
@@ -49,7 +50,7 @@ async function load() {
   // E3：最新备份显示完成时间，未完成则回退显示状态
   stats.lastBackup = pick(results[3], v => {
     const it = v.items && v.items[0]
-    return it ? (it.finishedAt || it.status) : '-'
+    return it ? (it.finishedAt || label(it.status)) : '-'
   })
   recent.value = results[4].status === 'fulfilled' ? (results[4].value.items || []) : []
   if (results.some(r => r.status === 'rejected')) {

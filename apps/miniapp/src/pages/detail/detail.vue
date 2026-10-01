@@ -36,12 +36,12 @@
       <textarea class="ta" v-model="claimDesc" placeholder="填写私密证明（物品特征、内含物等，仅发布者与你可见）" />
       <view class="imgs">
         <view class="imgbox" v-for="(p, i) in claimImgs" :key="i">
-          <image class="thumb" :src="p" mode="aspectFill" />
+          <image v-if="!failedImages[p]" class="thumb" :src="p" mode="aspectFill" @error="failedImages[p] = true" /><view v-else class="thumb ph-img" />
           <text class="del" @click="claimImgs.splice(i,1)">×</text>
         </view>
         <view class="imgadd" v-if="claimImgs.length < 3" @click="addImg(claimImgs)">＋</view>
       </view>
-      <button class="btn primary" :loading="submitting" @click="submitClaim">提交申请</button>
+      <button class="btn primary" :loading="submitting" :disabled="submitting" @click="submitClaim">提交申请</button>
     </view>
 
     <!-- 线索内联表单 -->
@@ -50,12 +50,12 @@
       <textarea class="ta" v-model="leadBody" placeholder="描述你看到的线索（仅寻物发布者与你可见）" />
       <view class="imgs">
         <view class="imgbox" v-for="(p, i) in leadImgs" :key="i">
-          <image class="thumb" :src="p" mode="aspectFill" />
+          <image v-if="!failedImages[p]" class="thumb" :src="p" mode="aspectFill" @error="failedImages[p] = true" /><view v-else class="thumb ph-img" />
           <text class="del" @click="leadImgs.splice(i,1)">×</text>
         </view>
         <view class="imgadd" v-if="leadImgs.length < 3" @click="addImg(leadImgs)">＋</view>
       </view>
-      <button class="btn primary" :loading="submitting" @click="submitLead">提交线索</button>
+      <button class="btn primary" :loading="submitting" :disabled="submitting" @click="submitLead">提交线索</button>
     </view>
 
     <view v-if="matches.length" class="card">
@@ -75,6 +75,7 @@
 </template>
 
 <script>
+import { localDateTime } from '../../utils/time'
 import { postApi, claimApi, leadApi, uploadFile, fileUrl } from '../../api/index'
 import { getToken } from '../../utils/request'
 import { pickCheckedImages } from '../../utils/image'
@@ -82,7 +83,7 @@ import { postStatusLabel, typeLabel } from '../../utils/labels'
 
 export default {
   data() {
-    return {
+    return { failedImages: {},
       id: null, post: null, matches: [], error: false, brokenFids: {},
       showClaimForm: false, claimDesc: '', claimImgs: [],
       showLeadForm: false, leadBody: '', leadImgs: [],
@@ -125,6 +126,7 @@ export default {
     },
     goEdit() { uni.navigateTo({ url: '/pages/publish/publish?id=' + this.id }) },
     async submitClaim() {
+      if (this.submitting) return
       if (!this.requireLogin()) return
       if (!this.claimDesc.trim()) { uni.showToast({ title: '请填写证明说明', icon: 'none' }); return }
       this.submitting = true
@@ -137,6 +139,7 @@ export default {
       } catch (e) { /* toasted */ } finally { this.submitting = false }
     },
     async submitLead() {
+      if (this.submitting) return
       if (!this.requireLogin()) return
       if (!this.leadBody.trim()) { uni.showToast({ title: '请填写线索', icon: 'none' }); return }
       this.submitting = true
@@ -170,7 +173,7 @@ export default {
       if (r.confirm) { await postApi.withdraw(this.id); uni.showToast({ title: '已撤回', icon: 'success' }); this.load() }
     },
     openDetail(id) { uni.navigateTo({ url: '/pages/detail/detail?id=' + id }) },
-    formatTime(t) { return t ? t.replace('T', ' ').slice(0, 16) : '未填写' }
+    formatTime(t) { return localDateTime(t) }
   }
 }
 </script>

@@ -64,6 +64,15 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.error(code.name(), "请求体格式错误", requestId(req)));
     }
 
+    @ExceptionHandler({org.springframework.web.method.annotation.MethodArgumentTypeMismatchException.class,
+            org.springframework.web.bind.MissingServletRequestParameterException.class,
+            org.springframework.web.multipart.support.MissingServletRequestPartException.class,
+            org.springframework.web.multipart.MultipartException.class,
+            java.time.format.DateTimeParseException.class})
+    public ResponseEntity<ApiResponse<Void>> handleBadRequest(Exception ex, HttpServletRequest req) {
+        return ResponseEntity.badRequest().body(ApiResponse.error("INVALID_ARGUMENT", "请求参数格式错误", requestId(req)));
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleUnexpected(Exception ex, HttpServletRequest req) {
         String requestId = requestId(req);

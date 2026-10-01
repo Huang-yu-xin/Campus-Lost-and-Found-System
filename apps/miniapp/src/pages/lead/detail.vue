@@ -7,7 +7,7 @@
       <view class="evi" v-if="lead.evidenceFileIds && lead.evidenceFileIds.length">
         <text class="lb">证据图片：</text>
         <view class="imgs">
-          <image class="thumb" v-for="(p, i) in eviImgs" :key="i" :src="p" mode="aspectFill" @click="preview(i)" />
+          <template v-for="(p, i) in eviImgs" :key="i"><image v-if="!failedImages[p]" class="thumb" :src="p" mode="aspectFill" @click="preview(i)" @error="failedImages[p] = true" /><view v-else class="thumb ph-img" /></template>
         </view>
       </view>
     </view>
@@ -28,12 +28,13 @@
 </template>
 
 <script>
+import { localDateTime } from '../../utils/time'
 import { leadApi, loadPrivateImage } from '../../api/index'
 import { leadStatusLabel } from '../../utils/labels'
 
 export default {
   data() {
-    return { leadId: null, lead: null, eviImgs: [], error: false, acting: false }
+    return { failedImages: {}, leadId: null, lead: null, eviImgs: [], error: false, acting: false }
   },
   onLoad(query) {
     this.leadId = query.leadId
@@ -92,4 +93,5 @@ export default {
 .btn.danger { background: #f56c6c; color: #fff; }
 .errstate { padding-top: 160rpx; text-align: center; }
 .errmsg { display: block; color: #909399; font-size: 28rpx; margin-bottom: 30rpx; }
+.ph-img { background: #ededed; }
 </style>

@@ -1,5 +1,9 @@
 # 部署与本地运行 (Deployment)
 
+> **生产部署必须显式设置 SPRING_PROFILES_ACTIVE=prod，否则开发默认会绕过生产启动守卫。禁止生产混用 dev/ci/test；显式 prod 的弱密钥或 mock 登录会拒绝启动。**
+
+所有新写入时间采用UTC；数据库连接设置会话 time_zone=+00:00，API输出带Z。既有无时区历史数据不能仅凭时间值辨认来源：上线前按数据来源核对，确认原为Asia/Shanghai的记录后再在离线维护窗口转换，不能不分来源批量减8小时。
+
 ## 1. 前置
 JDK 17 / Maven 3.9.4 / Node 24 / MySQL 8 / 微信开发者工具。确认 `JAVA_HOME` 指向 JDK17。
 
@@ -47,3 +51,5 @@ npm run dev:mp-weixin        # 用微信开发者工具导入 dist/dev/mp-weixin
 ## 7. 生产/正式发布外部条件（本期不承诺）
 - 微信小程序主体资质、服务类目、合法 HTTPS 域名、隐私政策与平台审核。
 - 生产必须：`MOCK_LOGIN_ENABLED=false`、强 `JWT_SECRET`、强管理员口令、机密仅经环境注入。
+
+显式prod与dev/test/ci混用时直接拒绝启动，即使密钥和mock设置本身安全，也不运行开发初始化逻辑。

@@ -15,11 +15,13 @@ public class ClaimEvidenceAccessChecker implements FilePrivateAccessChecker {
     private final ClaimEvidenceFileMapper evidenceMapper;
     private final ClaimMapper claimMapper;
     private final PostMapper postMapper;
+    private final edu.whut.clf.dispute.DisputeMapper disputeMapper;
 
-    public ClaimEvidenceAccessChecker(ClaimEvidenceFileMapper evidenceMapper, ClaimMapper claimMapper, PostMapper postMapper) {
+    public ClaimEvidenceAccessChecker(ClaimEvidenceFileMapper evidenceMapper, ClaimMapper claimMapper, PostMapper postMapper, edu.whut.clf.dispute.DisputeMapper disputeMapper) {
         this.evidenceMapper = evidenceMapper;
         this.claimMapper = claimMapper;
         this.postMapper = postMapper;
+        this.disputeMapper = disputeMapper;
     }
 
     @Override
@@ -40,6 +42,9 @@ public class ClaimEvidenceAccessChecker implements FilePrivateAccessChecker {
         if (claim.getApplicantId().equals(userId)) {
             return true;
         }
+        if (edu.whut.clf.common.security.AuthContext.current() != null
+                && edu.whut.clf.common.security.AuthContext.current().isAdmin()
+                && disputeMapper.countAssignedByClaim(claimId, userId) > 0) return true;
         Post post = postMapper.findById(claim.getPostId());
         return post != null && post.getPublisherId().equals(userId);
     }

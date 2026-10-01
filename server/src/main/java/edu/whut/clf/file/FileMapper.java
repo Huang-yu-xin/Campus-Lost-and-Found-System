@@ -19,6 +19,16 @@ public interface FileMapper {
     @Select("SELECT * FROM files WHERE id = #{id}")
     StoredFile findById(Long id);
 
+    @Select("SELECT * FROM files WHERE id = #{id} FOR UPDATE")
+    StoredFile lockById(Long id);
+
+    @Select("""
+            SELECT (EXISTS (SELECT 1 FROM post_images i JOIN posts p ON p.id = i.post_id
+                            WHERE i.file_id = #{id} AND p.status IN ('ACTIVE','HANDOVER','COMPLETED'))
+                 OR EXISTS (SELECT 1 FROM users u WHERE u.avatar_file_id = #{id} AND u.status != 'DISABLED'))
+            """)
+    boolean publiclyVisible(Long id);
+
     @Update("UPDATE files SET bound = 1 WHERE id = #{id}")
     int markBound(Long id);
 

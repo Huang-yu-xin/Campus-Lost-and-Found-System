@@ -7,6 +7,11 @@
       </view>
       <view class="badge">{{ campusText }}</view>
     </view>
+    <view class="card" v-else-if="profileError">
+      <text>资料加载失败，请重试</text>
+      <button class="btn" :loading="profileLoading" :disabled="profileLoading" @click="loadMe">重试</button>
+    </view>
+    <view class="card" v-else-if="profileLoading">正在加载资料…</view>
     <view class="card" v-else>
       <button class="btn primary" @click="goLogin">去登录</button>
     </view>
@@ -42,7 +47,7 @@ import { postStatusLabel, claimStatusLabel, leadStatusLabel } from '../../utils/
 
 export default {
   data() {
-    return { me: null, campusText: '校园身份未认证', tab: 'posts', items: [], page: 1, pageSize: 20, loading: false, noMore: false, error: false, _seq: 0 }
+    return { me: null, campusText: '校园身份未认证', profileError: false, profileLoading: false, tab: 'posts', items: [], page: 1, pageSize: 20, loading: false, noMore: false, error: false, _seq: 0 }
   },
   onShow() {
     if (getToken()) { this.loadMe() } else { this.me = null }
@@ -54,14 +59,18 @@ export default {
   },
   methods: {
     async loadMe() {
+      this.profileError = false; this.profileLoading = true
       try {
         this.me = await userApi.me()
         try {
           const cap = await authApi.campusCapabilities()
           this.campusText = cap.verificationEnabled ? '校园身份认证已开启' : '校园身份未认证（学校统一认证未接入）'
         } catch (e) { /* keep default */ }
-        this.switchTab(this.tab)
-      } catch (e) { this.me = null }
+        await this.switchTab(this.tab)
+      } catch (e) {
+        this.me = null
+        this.profileError = !(e && (e.statusCode === 401 || e.code === 'UNAUTHENTICATED'))
+      } finally { this.profileLoading = false }
     },
     fetch(page) {
       if (this.tab === 'posts') return userApi.myPosts(page)
@@ -86,13 +95,22 @@ export default {
       }
     },
     async loadMore() {
-      this.page += 1; this.loading = true
+      if (this.loading || this.noMore) return
+      const seq = this._seq
+      const nextPage = this.page + 1
+      this.loading = true
       try {
-        const res = await this.fetch(this.page)
+        const res = await this.fetch(nextPage)
+        if (seq !== this._seq) return
         const items = res.items || []
         this.items = this.items.concat(items)
-        if (items.length < this.pageSize) this.noMore = true
-      } catch (e) { this.page -= 1 /* E10 */ } finally { this.loading = false }
+        this.page = nextPage
+        this.noMore = items.length < this.pageSize
+      } catch (e) {
+        if (seq === this._seq) uni.showToast({ title: '加载更多失败，请重试', icon: 'none' })
+      } finally {
+        if (seq === this._seq) this.loading = false
+      }
     },
     title(it) {
       if (this.tab === 'posts') return it.title

@@ -1,3 +1,13 @@
+# 当前测试结果（2026-10-01）
+
+最新执行记录见 [P10](../reports/P10-report.md)：33单元、64项真实MySQL集成实跑，0失败；另2手动评估已独立启用执行。前端21项行为回归通过，双端生产构建成功；HTTP冒烟PASS35/FAIL0；全新迁移19表26外键。事实对29对召回100%，完整评估见[事实报告](match-eval/report-factual-pairs.md)。
+
+复跑：JDK17与deploy/.env配置就绪后，在server运行mvn test及CLF_IT=true DB_NAME=campus_lost_found_test mvn verify；根目录node --test tests/frontend/regression.cjs；运行中dev服务执行tests/e2e/e2e-smoke.sh。sweep与事实评估需显式CLF_SWEEP/CLF_EVAL_REAL启用，默认跳过不是通过。
+
+历史报告的数字不代表当前测试数量，以下保留当时记录。微信真机、真实微信外呼与隔离恢复条件尚未完成；不能把构建、方法级前端测试当作真机通过。
+
+---
+
 # 测试执行报告 (Test Report)
 
 > 如实记录。禁止把未执行写成"通过"（任务书 §0.1.8）。

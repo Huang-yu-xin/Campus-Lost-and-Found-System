@@ -42,6 +42,15 @@ public class StartupSecurityValidator {
             // 无激活 profile 时按 application.yml 默认 dev 处理（不视为生产）
             isProdLike = false;
         }
+        // 显式 prod 始终优先，不能被 dev/test 混合配置豁免。
+        if (java.util.Arrays.asList(env.getActiveProfiles()).contains("prod")) {
+            isProdLike = true;
+            for (String profile : env.getActiveProfiles()) {
+                if (DEV_PROFILES.contains(profile)) {
+                    throw new IllegalStateException("生产环境不能同时激活 dev/test/ci 配置");
+                }
+            }
+        }
         if (!isProdLike) {
             return;
         }

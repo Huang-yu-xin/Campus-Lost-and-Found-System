@@ -45,7 +45,7 @@ class MatchEvalSweepIT {
     private static final double STEP = 0.05;
 
     private record Cached(Post lost, Post found, long foundId, List<PoolMember> pool) {}
-    private record PoolMember(long id, double c, double l, double gapDays, double k, boolean hardNeg) {}
+    private record PoolMember(long id, double c, double l, double gapDays, double k, boolean hardNeg, java.util.Set<Double> windows) {}
     private record Cfg(double wc, double wl, double wt, double wk, double window) {}
 
     @Test
@@ -65,21 +65,38 @@ class MatchEvalSweepIT {
             Post lost = postMapper.findById(pair[0]);
             Post found = postMapper.findById(pair[1]);
             List<PoolMember> pool = new ArrayList<>();
-            for (Post m : matchService.candidatesFor(lost)) {
-                if (m.getId().equals(found.getId())) continue;
+            // 每个时间窗都调用生产相同SQL，缓存各窗成员身份，不能只改时间子分。
+            var allWindows = new java.util.LinkedHashSet<Double>();
+            for (double win : WINDOWS) allWindows.add(win);
+            allWindows.add((double) props.getMatch().getTimeWindowDays());
+            var members = new java.util.LinkedHashMap<Long, Post>();
+            var membership = new java.util.HashMap<Long, java.util.Set<Double>>();
+            var cfg = props.getMatch();
+            var anchor = lost.getEventTime() != null ? lost.getEventTime() : lost.getPublishedAt();
+            for (double win : allWindows) {
+                var selected = postMapper.findCandidatesWindowed("FOUND", lost.getId(),
+                        anchor.minusHours(cfg.getTimeToleranceHours()), anchor.plusDays((long) win),
+                        lost.getCategoryCode(), anchor.minusHours(cfg.getTimeToleranceHours()),
+                        anchor.plusDays(cfg.getCategoryWindowDays()),
+                        LocalDateTime.now(java.time.Clock.systemUTC()).minusDays(cfg.getNullEventWindowDays()),
+                        cfg.getCandidateArmLimit());
+                for (Post member : selected) {
+                    members.put(member.getId(), member);
+                    membership.computeIfAbsent(member.getId(), key -> new java.util.HashSet<>()).add(win);
+                }
+            }
+            members.putIfAbsent(found.getId(), found); // 真值分数保留，候选资格仍由membership决定。
+            for (Post m : members.values()) {
                 MatchScorer.Result r = scorer.score(lost, m);
-                double gapDays = gapDays(lost, m, tolHours);
-                boolean hard = m.getCategoryCode() != null && m.getCategoryCode().equals(lost.getCategoryCode())
+                boolean hard = !m.getId().equals(found.getId())
+                        && m.getCategoryCode() != null && m.getCategoryCode().equals(lost.getCategoryCode())
                         && m.getCampus() != null && m.getCampus().equals(lost.getCampus())
                         && m.getEventTime() != null && lost.getEventTime() != null
                         && Math.abs(Duration.between(lost.getEventTime(), m.getEventTime()).toDays()) <= 7;
-                pool.add(new PoolMember(m.getId(), r.category(), r.location(), gapDays, r.keyword(), hard));
+                pool.add(new PoolMember(m.getId(), r.category(), r.location(), gapDays(lost,m,tolHours),
+                        r.keyword(), hard, membership.getOrDefault(m.getId(), java.util.Set.of())));
             }
-            MatchScorer.Result rf = scorer.score(lost, found);
-            double gapF = gapDays(lost, found, tolHours);
-            List<PoolMember> poolWithSelf = new ArrayList<>(pool);
-            poolWithSelf.add(new PoolMember(found.getId(), rf.category(), rf.location(), gapF, rf.keyword(), false));
-            Cached cached = new Cached(lost, found, found.getId(), poolWithSelf);
+            Cached cached = new Cached(lost, found, found.getId(), pool);
             (i < trainSize ? train : test).add(cached);
         }
 
@@ -128,16 +145,21 @@ class MatchEvalSweepIT {
         double testRetention = test.stream().filter(p -> score(p, bestF) >= tauF).count() / (double) test.size();
         long hardNeg = test.stream().mapToLong(p -> p.pool().stream().filter(m -> m.hardNeg()
                 && scoreOf(bestF, m) >= tauF).count()).sum();
-        long hardNegTotal = test.stream().mapToLong(p -> p.pool().stream().filter(PoolMember::hardNeg).count()).sum();
+        long hardNegTotal = test.stream().mapToLong(p -> p.pool().stream().filter(m -> m.hardNeg() && m.windows().contains(bestF.window())).count()).sum();
 
         // 5) 报告
         double testHit1 = hitK(test, best), testHit5 = hitK5(test, best);
         StringBuilder sb = new StringBuilder();
         sb.append("# 匹配调参 sweep 报告\n\n");
-        sb.append("- 生成时间：").append(LocalDateTime.now().withNano(0)).append("\n");
+        sb.append("- 生成时间：").append(LocalDateTime.now(java.time.Clock.systemUTC()).withNano(0)).append("\n");
         sb.append("- 网格：权重单纯形步长 0.05 × 时间窗 {14,21,30,45}，共 ").append(cfgs.size()).append(" 组；时间切分 训练/测试 = 120/80 对\n");
-        sb.append("- 现行默认：wC=0.40 wL=0.25 wT=0.20 wK=0.15 window=30 → 测试集 Hit@1=")
-          .append(String.format("%.1f%%", hitK(test, new Cfg(0.40, 0.25, 0.20, 0.15, 30)) * 100)).append("\n\n");
+        var current = props.getMatch();
+        var defaults = new Cfg(current.getWCategory(),current.getWLocation(),current.getWTime(),
+                current.getWKeyword(),current.getTimeWindowDays());
+        sb.append("- 现行默认：wC=").append(defaults.wc()).append(" wL=").append(defaults.wl())
+                .append(" wT=").append(defaults.wt()).append(" wK=").append(defaults.wk())
+                .append(" window=").append(defaults.window()).append(" → 测试集 Hit@1=")
+                .append(String.format("%.1f%%", hitK(test,defaults)*100)).append("\n\n");
         sb.append("## 训练集 Top5（Hit@1 / Hit@5）\n\n| wC / wL / wT / wK | 窗口(天) | Hit@1 | Hit@5 |\n|---|---|---|---|\n");
         top5.forEach(l -> sb.append(l).append("\n"));
 
@@ -153,7 +175,7 @@ class MatchEvalSweepIT {
             double ret = test.stream().filter(p -> score(p, bestF) >= tt).count() / (double) test.size();
             long hn = test.stream().mapToLong(p -> p.pool().stream().filter(m -> m.hardNeg()
                     && scoreOf(bestF, m) >= tt).count()).sum();
-            long hnt = test.stream().mapToLong(p -> p.pool().stream().filter(PoolMember::hardNeg).count()).sum();
+            long hnt = test.stream().mapToLong(p -> p.pool().stream().filter(m -> m.hardNeg() && m.windows().contains(bestF.window())).count()).sum();
             sb.append(String.format("| %.2f | %.1f%% | %d/%d |%n", tv, ret * 100, hn, hnt));
         }
 
@@ -165,7 +187,7 @@ class MatchEvalSweepIT {
         sb.append("- 选定 τ=").append(tau).append("（训练集保留率≥95% 的最大值）→ 测试集保留率 ")
           .append(String.format("%.1f%%", testRetention * 100))
           .append("，难负误报 ").append(hardNeg).append("/").append(hardNegTotal).append("\n");
-        sb.append("\n> 方法说明：子分 C/L/K 与间隔天数缓存后离线重排，与生产线性公式一致；τ 优先保召回（结果是人看的 Top-20 列表）。\n");
+        sb.append("\n> 方法说明：各时间窗调用生产候选SQL；四位小数分数与postId同分排序与生产一致；τ 优先保召回（结果是人看的 Top-20 列表）。\n");
         Files.createDirectories(Path.of("target/match-eval"));
         Files.writeString(Path.of("target/match-eval/report-sweep.md"), sb.toString());
         System.out.println("SWEEP DONE: best=" + bestF + " testHit1=" + testHit1 + " tau=" + tau);
@@ -176,7 +198,7 @@ class MatchEvalSweepIT {
     }
 
     private static double gapDays(Post lost, Post cand, double tolHours) {
-        if (lost.getEventTime() == null || cand.getEventTime() == null) return -1;
+        if (lost.getEventTime() == null || cand.getEventTime() == null) return Double.NEGATIVE_INFINITY;
         long hours = Duration.between(lost.getEventTime(), cand.getEventTime()).toHours();
         if (hours < -tolHours) return Double.NEGATIVE_INFINITY; // 异常 → T=0
         return Math.max(0, hours) / 24.0;
@@ -187,7 +209,8 @@ class MatchEvalSweepIT {
     }
 
     private static double scoreOf(Cfg c, PoolMember m) {
-        return c.wc() * m.c() + c.wl() * m.l() + c.wt() * tScore(m.gapDays(), c.window()) + c.wk() * m.k();
+        if (!m.windows().contains(c.window())) return -1;
+        return Math.round((c.wc() * m.c() + c.wl() * m.l() + c.wt() * tScore(m.gapDays(), c.window()) + c.wk() * m.k()) * 10000.0) / 10000.0;
     }
 
     private static double score(Cached p, Cfg c) {
@@ -207,8 +230,8 @@ class MatchEvalSweepIT {
         long hit = ps.stream().filter(p -> {
             double sSelf = score(p, c);
             if (sSelf < props.getMatch().getMinScore()) return false; // 生产路径含阈值
-            long better = p.pool().stream().filter(m -> scoreOf(c, m) > sSelf + 1e-12).count();
-            return better < k; // rank ≤ k（并列按 postId 升序，真值 id 未知时保守不计并列优势）
+            long better = p.pool().stream().filter(m -> scoreOf(c, m) > sSelf || (scoreOf(c, m) == sSelf && m.id() < p.foundId())).count();
+            return better < k; // 与生产一致：四位小数同分按postId升序
         }).count();
         return hit / (double) ps.size();
     }

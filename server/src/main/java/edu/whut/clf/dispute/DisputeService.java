@@ -51,10 +51,10 @@ public class DisputeService {
         this.auditService = auditService;
     }
 
-    @Transactional
+    @Transactional(isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
     public DisputeView raise(Long claimId, Long userId, RaiseDisputeRequest req) {
         userService.requireNotRestricted(userId); // D6/R5：受限用户不得发起争议
-        ClaimAccessService.Participants pt = claimAccess.requireParticipant(claimId, userId);
+        ClaimAccessService.Participants pt = claimAccess.lockParticipant(claimId, userId);
         // 仅在有效交接期（WAITING_HANDOVER）可发起
         if (!ClaimStatus.WAITING_HANDOVER.name().equals(pt.claimStatus())) {
             throw new BusinessException(ErrorCode.CONFLICT, "当前状态不可发起争议");
@@ -99,18 +99,18 @@ public class DisputeService {
         return PageResult.of(items.stream().map(d -> toAdminView(d, false)).toList(), total, pg.page(), pg.size());
     }
 
-    public AdminDisputeView adminGet(Long disputeId) {
+    public AdminDisputeView adminGet(Long disputeId, Long adminId) {
         Dispute d = disputeMapper.findById(disputeId);
         if (d == null) {
             throw BusinessException.of(ErrorCode.DISPUTE_NOT_FOUND);
         }
-        return toAdminView(d, true);
+        return toAdminView(d, java.util.Objects.equals(adminId, d.getAssignedAdminId()));
     }
 
     /** 管理员受理争议（B9）：受理后方可读取受限证据（DisputeEvidenceAccessChecker）。 */
-    @Transactional
+    @Transactional(isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
     public void assign(Long disputeId, Long adminId) {
-        Dispute d = disputeMapper.findById(disputeId);
+        Dispute d = lockDispute(disputeId);
         if (d == null) {
             throw BusinessException.of(ErrorCode.DISPUTE_NOT_FOUND);
         }
@@ -121,15 +121,16 @@ public class DisputeService {
         auditService.record(adminId, Principal.ROLE_ADMIN, "DISPUTE_ASSIGN", "DISPUTE", disputeId, "SUCCESS", null);
     }
 
-    @Transactional
+    @Transactional(isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
     public void resolve(Long disputeId, Long adminId, ResolveRequest req) {
-        Dispute d = disputeMapper.findById(disputeId);
+        Dispute d = lockDispute(disputeId);
         if (d == null) {
             throw BusinessException.of(ErrorCode.DISPUTE_NOT_FOUND);
         }
         if (!DisputeStatus.OPEN.name().equals(d.getStatus())) {
             throw BusinessException.of(ErrorCode.DISPUTE_NOT_OPEN);
         }
+        if (!java.util.Objects.equals(d.getAssignedAdminId(), adminId)) throw BusinessException.of(ErrorCode.DISPUTE_NOT_FOUND);
         ResolutionType type;
         try {
             type = ResolutionType.valueOf(req.resolutionType());
@@ -140,7 +141,7 @@ public class DisputeService {
         if (claim == null) {
             throw BusinessException.of(ErrorCode.CLAIM_NOT_FOUND);
         }
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now(java.time.Clock.systemUTC());
         String disputeStatus = (type == ResolutionType.CLOSE)
                 ? DisputeStatus.CLOSED.name() : DisputeStatus.RESOLVED.name();
 
@@ -164,6 +165,15 @@ public class DisputeService {
      * 终止本次交接并按目标状态处置招领；任一状态转换未命中(0 行)则抛冲突使整个裁决事务回滚，
      * 避免"争议已标裁决但 claim/post 静默未变"的不一致（B6）。
      */
+    private Dispute lockDispute(Long disputeId) {
+        Dispute d = disputeMapper.findById(disputeId);
+        if (d == null) throw BusinessException.of(ErrorCode.DISPUTE_NOT_FOUND);
+        Claim c = claimMapper.findById(d.getClaimId());
+        postService.lockForUpdate(c.getPostId());
+        claimMapper.lockById(c.getId());
+        return disputeMapper.lockById(disputeId);
+    }
+
     private void applyTermination(Claim claim, PostStatus postTarget) {
         int c = claimMapper.changeStatus(claim.getId(),
                 ClaimStatus.WAITING_HANDOVER.name(), ClaimStatus.CLOSED.name());
@@ -186,7 +196,7 @@ public class DisputeService {
 
     private AdminDisputeView toAdminView(Dispute d, boolean includeEvidence) {
         List<Long> ev = includeEvidence ? evidenceMapper.findFileIds(d.getId()) : List.of();
-        return new AdminDisputeView(d.getId(), d.getClaimId(), d.getRaisedBy(), d.getReason(), d.getDescription(),
+        return new AdminDisputeView(d.getId(), d.getClaimId(), d.getRaisedBy(), d.getReason(), includeEvidence ? d.getDescription() : null,
                 d.getStatus(), d.getAssignedAdminId(), d.getResolutionType(), d.getResolutionNote(),
                 d.getCreatedAt(), d.getResolvedAt(), ev);
     }

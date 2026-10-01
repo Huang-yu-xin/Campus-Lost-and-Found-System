@@ -74,7 +74,7 @@ public class MatchService {
             catStart = catAnchor.minusDays(cfg.getCategoryWindowDays());
             catEnd = catAnchor.plusHours(cfg.getTimeToleranceHours());
         }
-        LocalDateTime nullWinStart = LocalDateTime.now().minusDays(cfg.getNullEventWindowDays());
+        LocalDateTime nullWinStart = LocalDateTime.now(java.time.Clock.systemUTC()).minusDays(cfg.getNullEventWindowDays());
         List<Post> candidates = postMapper.findCandidatesWindowed(opposite, self.getId(),
                 winStart, winEnd, self.getCategoryCode(), catStart, catEnd,
                 nullWinStart, cfg.getCandidateArmLimit());

@@ -10,6 +10,10 @@ app:
     jwt-secret: ${JWT_SECRET:}
 
 # D15(P2-15)：生产关闭 API 文档与 Swagger UI，减少攻击面
+logging:
+  level:
+    edu.whut.clf: INFO
+
 springdoc:
   api-docs:
     enabled: false

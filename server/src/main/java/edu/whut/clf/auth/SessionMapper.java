@@ -21,6 +21,7 @@ public interface SessionMapper {
     @Select("""
             SELECT COUNT(*) FROM sessions
             WHERE token_hash = #{tokenHash} AND revoked_at IS NULL AND expires_at > #{now}
+              AND EXISTS (SELECT 1 FROM users u WHERE u.id = sessions.user_id AND u.status != 'DISABLED')
             """)
     long countActive(@Param("tokenHash") String tokenHash, @Param("now") LocalDateTime now);
 

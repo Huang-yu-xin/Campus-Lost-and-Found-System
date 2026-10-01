@@ -7,6 +7,8 @@ export const authApi = {
 }
 
 export const adminApi = {
+  getPost: id => request.get('/admin/posts/' + id),
+  getClaim: id => request.get('/claims/' + id),
   listPosts: (params) => request.get('/admin/posts', { params }),
   removePost: (id, reason) => request.post(`/admin/posts/${id}/remove`, { reason }),
   restorePost: (id, reason) => request.post(`/admin/posts/${id}/restore`, { reason }),

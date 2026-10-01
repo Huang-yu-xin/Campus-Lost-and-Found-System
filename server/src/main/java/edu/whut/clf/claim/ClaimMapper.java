@@ -21,6 +21,9 @@ public interface ClaimMapper {
     @Select("SELECT * FROM claims WHERE id = #{id}")
     Claim findById(Long id);
 
+    @Select("SELECT * FROM claims WHERE id = #{id} FOR UPDATE")
+    Claim lockById(Long id);
+
     @Select("SELECT COUNT(*) FROM claims WHERE post_id = #{postId} AND status IN ('PENDING','WAITING_HANDOVER')")
     long countActiveByPost(Long postId);
 
@@ -30,10 +33,10 @@ public interface ClaimMapper {
             """)
     long countActiveByPostAndApplicant(@Param("postId") Long postId, @Param("applicantId") Long applicantId);
 
-    @Select("SELECT * FROM claims WHERE post_id = #{postId} ORDER BY created_at DESC")
+    @Select("SELECT * FROM claims WHERE post_id = #{postId} ORDER BY created_at DESC, id DESC")
     List<Claim> findByPost(Long postId);
 
-    @Select("SELECT * FROM claims WHERE applicant_id = #{userId} ORDER BY created_at DESC LIMIT #{offset}, #{limit}")
+    @Select("SELECT * FROM claims WHERE applicant_id = #{userId} ORDER BY created_at DESC, id DESC LIMIT #{offset}, #{limit}")
     List<Claim> findByApplicant(@Param("userId") Long userId, @Param("offset") long offset, @Param("limit") int limit);
 
     /** E28：我的申请（联表 posts 取标题），构造器显式映射到 ClaimSummary record。 */
@@ -50,7 +53,7 @@ public interface ClaimMapper {
             SELECT c.id, c.post_id, c.applicant_id, c.status, c.created_at, c.reviewed_at, p.title AS post_title
             FROM claims c JOIN posts p ON c.post_id = p.id
             WHERE c.applicant_id = #{userId}
-            ORDER BY c.created_at DESC
+            ORDER BY c.created_at DESC, c.id DESC
             LIMIT #{offset}, #{limit}
             """)
     List<ClaimSummary> findSummaryByApplicant(@Param("userId") Long userId,
@@ -97,7 +100,7 @@ public interface ClaimMapper {
                    c.applicant_id, c.status, c.created_at, c.reviewed_at
             FROM claims c JOIN posts p ON c.post_id = p.id
             WHERE p.publisher_id = #{publisherId}
-            ORDER BY c.created_at DESC
+            ORDER BY c.created_at DESC, c.id DESC
             LIMIT #{offset}, #{limit}
             """)
     List<ReceivedClaimItem> findReceivedByPublisher(@Param("publisherId") Long publisherId,

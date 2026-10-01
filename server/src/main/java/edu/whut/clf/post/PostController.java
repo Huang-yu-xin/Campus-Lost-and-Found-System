@@ -50,11 +50,11 @@ public class PostController {
             @RequestParam(required = false) String type,
             @RequestParam(required = false) String category,
             @RequestParam(required = false) String campus,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime eventFrom,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime eventTo,
+            @RequestParam(required = false) String eventFrom,
+            @RequestParam(required = false) String eventTo,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int pageSize) {
-        return ApiResponse.ok(postService.publicList(keyword, type, category, campus, eventFrom, eventTo, page, pageSize));
+        return ApiResponse.ok(postService.publicList(keyword, type, category, campus, edu.whut.clf.common.config.UtcTimeConfiguration.parse(eventFrom), edu.whut.clf.common.config.UtcTimeConfiguration.parse(eventTo), page, pageSize));
     }
 
     @GetMapping("/{postId}")

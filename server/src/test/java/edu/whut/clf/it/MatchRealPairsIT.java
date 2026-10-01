@@ -61,7 +61,7 @@ class MatchRealPairsIT {
 
             // 点时 t：两帖都仍开放的最后时刻（通常 = found 交接完成时间，早于 lost 关联时间）
             LocalDateTime t = earliest(lost.getClosedAt(), found.getClosedAt());
-            if (t == null) t = LocalDateTime.now();
+            if (t == null) t = LocalDateTime.now(java.time.Clock.systemUTC());
 
             List<Post> pool = reconstructPoolAt(lost, t, cfg);
             boolean recalled = pool.stream().anyMatch(p -> p.getId().equals(found.getId()));
@@ -91,7 +91,7 @@ class MatchRealPairsIT {
 
         StringBuilder sb = new StringBuilder();
         sb.append("# 事实链接对评估\n\n");
-        sb.append("- 生成时间：").append(LocalDateTime.now().withNano(0)).append("\n");
+        sb.append("- 生成时间：").append(LocalDateTime.now(java.time.Clock.systemUTC()).withNano(0)).append("\n");
         sb.append("- 事实链接对数：").append(pairs).append("（来自 posts.resolved_by_claim_id）\n");
         if (pairs == 0) {
             sb.append("\n> 事实对为 0——请先重新生成模拟数据（S5：tests/performance/gen_mock_data.py "

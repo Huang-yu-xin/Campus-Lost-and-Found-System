@@ -24,7 +24,10 @@ public interface BackupRecordMapper {
     int finish(@Param("id") Long id, @Param("status") String status, @Param("finishedAt") LocalDateTime finishedAt,
                @Param("manifestPath") String manifestPath, @Param("checksum") String checksum);
 
-    @Select("SELECT * FROM backup_records ORDER BY started_at DESC LIMIT #{offset}, #{limit}")
+    @Select("SELECT * FROM backup_records WHERE id = #{id}")
+    BackupRecord findById(Long id);
+
+    @Select("SELECT * FROM backup_records ORDER BY started_at DESC, id DESC LIMIT #{offset}, #{limit}")
     List<BackupRecord> list(@Param("offset") long offset, @Param("limit") int limit);
 
     @Select("SELECT COUNT(*) FROM backup_records")

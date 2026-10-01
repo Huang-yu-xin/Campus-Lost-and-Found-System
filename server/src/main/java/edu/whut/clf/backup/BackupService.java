@@ -41,7 +41,7 @@ public class BackupService {
     public BackupRecord initiate(Long adminId) {
         BackupRecord rec = new BackupRecord();
         rec.setInitiatedBy(adminId);
-        rec.setStartedAt(LocalDateTime.now());
+        rec.setStartedAt(LocalDateTime.now(java.time.Clock.systemUTC()));
         rec.setStatus("RUNNING");
         mapper.insert(rec);
 
@@ -65,18 +65,18 @@ public class BackupService {
                     + ",\"note\":\"数据库导出请用 ops 离线脚本；本备份含受控图片目录\"}";
             Files.writeString(manifest, manifestJson, StandardOpenOption.CREATE);
 
-            mapper.finish(rec.getId(), "SUCCESS", LocalDateTime.now(), manifest.toString(), checksum);
+            mapper.finish(rec.getId(), "SUCCESS", LocalDateTime.now(java.time.Clock.systemUTC()), manifest.toString(), checksum);
             auditService.record(adminId, Principal.ROLE_ADMIN, "BACKUP_RUN", "BACKUP", rec.getId(), "SUCCESS", null);
             rec.setStatus("SUCCESS");
             rec.setManifestPath(manifest.toString());
             rec.setChecksum(checksum);
         } catch (Exception e) {
             log.error("backup failed id={}", rec.getId(), e);
-            mapper.finish(rec.getId(), "FAILED", LocalDateTime.now(), null, null);
+            mapper.finish(rec.getId(), "FAILED", LocalDateTime.now(java.time.Clock.systemUTC()), null, null);
             auditService.record(adminId, Principal.ROLE_ADMIN, "BACKUP_RUN", "BACKUP", rec.getId(), "FAILURE", null);
             rec.setStatus("FAILED");
         }
-        return rec;
+        return mapper.findById(rec.getId());
     }
 
     public PageResult<BackupRecord> list(int page, int pageSize) {
@@ -90,8 +90,8 @@ public class BackupService {
      * 返回置为 FAILED 的行数。
      */
     public int failTimedOutRunning() {
-        LocalDateTime cutoff = LocalDateTime.now().minusHours(1);
-        int n = mapper.failRunningBefore(cutoff, LocalDateTime.now());
+        LocalDateTime cutoff = LocalDateTime.now(java.time.Clock.systemUTC()).minusHours(1);
+        int n = mapper.failRunningBefore(cutoff, LocalDateTime.now(java.time.Clock.systemUTC()));
         if (n > 0) {
             log.warn("backup: marked {} timed-out RUNNING record(s) as FAILED", n);
         }

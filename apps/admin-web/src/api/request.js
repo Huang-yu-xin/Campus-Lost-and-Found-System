@@ -15,8 +15,11 @@ request.interceptors.request.use((config) => {
 
 // E4：去重标志——并发多请求同时 401 时只弹一次提示、只跳一次登录
 let unauthorizedHandled = false
+let handledToken = null
 function handleUnauthorized() {
-  if (unauthorizedHandled) return
+  const token = localStorage.getItem('clf_admin_token')
+  if (unauthorizedHandled && (!token || token === handledToken)) return
+  handledToken = token
   unauthorizedHandled = true
   localStorage.removeItem('clf_admin_token')
   if (!location.pathname.includes('/login')) {
@@ -40,7 +43,7 @@ request.interceptors.response.use(
   (error) => {
     const status = error?.response?.status
     const body = error?.response?.data
-    if (status === 401 || body?.code === 'UNAUTHENTICATED') {
+    if ((status === 401 && body?.code !== 'ADMIN_LOGIN_FAILED') || body?.code === 'UNAUTHENTICATED') {
       handleUnauthorized()
     }
     return Promise.reject(body || error)

@@ -8,7 +8,7 @@
       <view class="evi" v-if="claim.evidenceFileIds && claim.evidenceFileIds.length">
         <text class="lb">证据图片：</text>
         <view class="imgs">
-          <image class="thumb" v-for="(p, i) in eviImgs" :key="i" :src="p" mode="aspectFill" @click="previewEvi(i)" />
+          <template v-for="(p, i) in eviImgs" :key="i"><image v-if="!failedImages[p]" class="thumb" :src="p" mode="aspectFill" @click="previewEvi(i)" @error="failedImages[p] = true" /><view v-else class="thumb ph-img" /></template>
         </view>
       </view>
 
@@ -47,12 +47,12 @@
         <text class="lb">证据图片（可选，最多3张）</text>
         <view class="imgs">
           <view class="imgbox" v-for="(p, i) in disputeImgs" :key="i">
-            <image class="thumb" :src="p" mode="aspectFill" />
+            <image v-if="!failedImages[p]" class="thumb" :src="p" mode="aspectFill" @error="failedImages[p] = true" /><view v-else class="thumb ph-img" />
             <text class="del" @click="disputeImgs.splice(i,1)">×</text>
           </view>
           <view class="imgadd" v-if="disputeImgs.length < 3" @click="addDisputeImg">＋</view>
         </view>
-        <button class="btn primary" :loading="submittingDispute" @click="submitDispute">提交争议</button>
+        <button class="btn primary" :loading="submittingDispute" :disabled="submittingDispute" @click="submitDispute">提交争议</button>
       </view>
     </view>
 
@@ -79,7 +79,7 @@
               <view class="cand-title">{{ c.title }}</view>
               <view class="meta">{{ c.campus || '—' }} · {{ fmt(c.eventTime) || '时间未填' }} · 文本重合 {{ c.overlap }}</view>
             </view>
-            <button class="btn primary small" :loading="resolving" @click="doResolve(c.id)">关联并结束寻物</button>
+            <button class="btn primary small" :loading="resolving" :disabled="resolving" @click="doResolve(c.id)">关联并结束寻物</button>
           </view>
         </view>
         <!-- 无候选 → 手动选择 -->
@@ -87,15 +87,15 @@
           <view class="meta">没有自动匹配到的寻物帖。</view>
           <button class="btn small" @click="toggleManual">手动选择我的寻物帖</button>
           <view v-if="showManual" class="cand-list">
-            <view v-if="!manualPosts.length" class="meta">你当前没有进行中的寻物帖。</view>
+            <view v-if="!manualPosts.length && manualNoMore && !manualLoading" class="meta">你当前没有进行中的寻物帖。</view>
             <view class="cand" v-for="p in manualPosts" :key="p.id">
               <view class="cand-main">
                 <view class="cand-title">{{ p.title }}</view>
                 <view class="meta">{{ p.campus || '—' }} · {{ fmt(p.eventTime) || '时间未填' }}</view>
               </view>
-              <button class="btn primary small" :loading="resolving" @click="doResolve(p.id)">关联</button>
+              <button class="btn primary small" :loading="resolving" :disabled="resolving" @click="doResolve(p.id)">关联</button>
             </view>
-            <button v-if="manualPosts.length && !manualNoMore" class="btn small" :loading="manualLoading" @click="loadManualPosts">加载更多</button>
+            <button v-if="!manualNoMore" class="btn small" :loading="manualLoading" @click="loadManualPosts">加载更多</button>
           </view>
         </view>
       </block>
@@ -122,13 +122,14 @@
 </template>
 
 <script>
+import { localDateTime } from '../../utils/time'
 import { claimApi, userApi, loadPrivateImage, uploadFile } from '../../api/index'
 import { pickCheckedImages } from '../../utils/image'
 import { claimStatusLabel } from '../../utils/labels'
 
 export default {
   data() {
-    return {
+    return { failedImages: {},
       claimId: null, claim: null, error: false, messages: [], disputes: [], eviImgs: [], msgText: '',
       showDisputeForm: false, disputeReason: '', disputeImgs: [], submittingDispute: false,
       // V4 闭环：关联寻物帖
@@ -182,6 +183,7 @@ export default {
       } catch (e) { if (this.manualPage === 1) this.manualPosts = [] } finally { this.manualLoading = false }
     },
     async doResolve(lostPostId) {
+      if (this.resolving) return
       this.resolving = true
       try {
         await claimApi.resolveLost(this.claimId, lostPostId)
@@ -274,6 +276,7 @@ export default {
       for (const p of paths) { if (this.disputeImgs.length < 3) this.disputeImgs.push(p) }
     },
     async submitDispute() {
+      if (this.submittingDispute) return
       if (!this.disputeReason.trim()) { uni.showToast({ title: '请填写争议原因', icon: 'none' }); return }
       this.submittingDispute = true
       try {
@@ -298,7 +301,7 @@ export default {
     },
     disputeStatusText(s) { return { OPEN: '处理中', RESOLVED: '已裁决', CLOSED: '已关闭' }[s] || s },
     resolutionText(t) { return { CONTINUE: '继续交接', TERMINATE_REOPEN: '终止并重开', CLOSE: '关闭处理' }[t] || t },
-    fmt(t) { return t ? t.replace('T', ' ').slice(0, 16) : '' }
+    fmt(t) { return localDateTime(t) }
   }
 }
 </script>
@@ -339,4 +342,5 @@ export default {
 .cand-empty { margin-top: 12rpx; }
 .errstate { padding-top: 160rpx; text-align: center; }
 .errmsg { display: block; color: #909399; font-size: 28rpx; margin-bottom: 30rpx; }
+.ph-img { background: #ededed; }
 </style>

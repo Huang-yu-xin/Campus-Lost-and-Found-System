@@ -54,7 +54,7 @@ class MatchServiceTest {
         p.setCampus(campus);
         p.setEventLocation(loc);
         p.setEventTime(eventTime);
-        p.setPublishedAt(LocalDateTime.now().minusDays(1));
+        p.setPublishedAt(LocalDateTime.now(java.time.Clock.systemUTC()).minusDays(1));
         p.setStatus(PostStatus.ACTIVE.name());
         p.setVersion(0);
         return p;
@@ -63,14 +63,14 @@ class MatchServiceTest {
     @Test
     void imagesFetchedInSingleBatch_afterTruncation() {
         Post self = post(1, "LOST", "水杯", "南湖校区", "图书馆",
-                LocalDateTime.now().minusDays(2), "丢失白色保温杯", "白色保温杯在图书馆遗失");
+                LocalDateTime.now(java.time.Clock.systemUTC()).minusDays(2), "丢失白色保温杯", "白色保温杯在图书馆遗失");
         when(postMapper.findById(1L)).thenReturn(self);
 
         // 60 条候选，全部高分（同类同地）：截断后只应保留 20 条
         List<Post> candidates = new java.util.ArrayList<>();
         for (long id = 100; id < 160; id++) {
             candidates.add(post(id, "FOUND", "水杯", "南湖校区", "图书馆",
-                    LocalDateTime.now().minusDays(1), "捡到白色保温杯", "捡到白色保温杯在图书馆"));
+                    LocalDateTime.now(java.time.Clock.systemUTC()).minusDays(1), "捡到白色保温杯", "捡到白色保温杯在图书馆"));
         }
         when(postMapper.findCandidatesWindowed(anyString(), any(), any(), any(), any(), any(), any(), any(), anyInt()))
                 .thenReturn(candidates);
@@ -105,12 +105,12 @@ class MatchServiceTest {
     @Test
     void lowScoreCandidates_getNoImageQuery() {
         Post self = post(1, "LOST", "水杯", "南湖校区", "图书馆",
-                LocalDateTime.now().minusDays(2), "丢失白色保温杯", "白色保温杯在图书馆遗失");
+                LocalDateTime.now(java.time.Clock.systemUTC()).minusDays(2), "丢失白色保温杯", "白色保温杯在图书馆遗失");
         when(postMapper.findById(1L)).thenReturn(self);
         // 全部低分候选（类别不同、地点/文本无重合）→ 过滤后为空 → 不应触发任何图片查询
         List<Post> candidates = List.of(
                 post(200, "FOUND", "钥匙", "余家头校区", "操场",
-                        LocalDateTime.now().plusDays(100), "捡到一串钥匙", "操场捡到钥匙"));
+                        LocalDateTime.now(java.time.Clock.systemUTC()).plusDays(100), "捡到一串钥匙", "操场捡到钥匙"));
         when(postMapper.findCandidatesWindowed(anyString(), any(), any(), any(), any(), any(), any(), any(), anyInt()))
                 .thenReturn(candidates);
 
@@ -124,7 +124,7 @@ class MatchServiceTest {
     @Test
     void nonActiveSelf_returnsEmpty_withoutCandidateQuery() {
         Post self = post(1, "LOST", "水杯", "南湖校区", "图书馆",
-                LocalDateTime.now().minusDays(2), "丢失保温杯", "x");
+                LocalDateTime.now(java.time.Clock.systemUTC()).minusDays(2), "丢失保温杯", "x");
         self.setStatus(PostStatus.COMPLETED.name());
         when(postMapper.findById(1L)).thenReturn(self);
 

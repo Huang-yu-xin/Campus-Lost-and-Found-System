@@ -35,6 +35,13 @@ public class AdminGovernanceController {
         return ApiResponse.ok(service.listPosts(status, type, page, pageSize));
     }
 
+    @GetMapping("/posts/{postId}")
+    @Operation(summary = "查看发布公开详情与治理历史")
+    public ApiResponse<AdminGovernanceService.PostGovernanceDetail> detail(@PathVariable Long postId) {
+        AuthContext.requireAdmin();
+        return ApiResponse.ok(service.postDetail(postId));
+    }
+
     @PostMapping("/posts/{postId}/remove")
     @Operation(summary = "下架信息 FR-ADMIN-01")
     public ApiResponse<Void> remove(@PathVariable Long postId, @Valid @RequestBody ReasonRequest req) {

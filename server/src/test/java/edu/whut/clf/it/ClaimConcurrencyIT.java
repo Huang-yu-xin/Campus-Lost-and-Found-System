@@ -75,6 +75,7 @@ class ClaimConcurrencyIT {
         List<Claim> claims = claimMapper.findByPost(postId);
         long waiting = claims.stream().filter(c -> ClaimStatus.WAITING_HANDOVER.name().equals(c.getStatus())).count();
         assertEquals(1, waiting, "至多一个 WAITING_HANDOVER");
+        assertEquals(1, claims.stream().filter(c -> ClaimStatus.CLOSED.name().equals(c.getStatus())).count(), "其余有效申请应关闭");
     }
 
     private void runAccept(Long claimId, Long publisher, CountDownLatch start,
@@ -83,8 +84,12 @@ class ClaimConcurrencyIT {
             start.await();
             claimService.review(claimId, publisher, new ReviewRequest("ACCEPT", null));
             success.incrementAndGet();
-        } catch (Exception e) {
+        } catch (edu.whut.clf.common.error.BusinessException e) {
+            assertEquals(409, e.getErrorCode().httpStatus().value());
             conflict.incrementAndGet();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new AssertionError(e);
         }
     }
 

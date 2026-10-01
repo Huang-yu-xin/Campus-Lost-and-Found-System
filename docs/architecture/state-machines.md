@@ -103,3 +103,7 @@ sequenceDiagram
 ```
 
 > 关键并发场景必须用**真实 MySQL**（或行为等价容器）测试，不得用 Mock 仓储冒充（TC-CLAIM-03 / TC-HANDOVER-02 / TC-DISPUTE-01）。
+
+## 终审并发实现约束
+
+认领提交、帖子撤回/编辑/治理共享帖子行锁；认领审核/撤回/确认/取消/寻物关联遵守帖子→申请锁顺序。发起争议与assign/resolve遵守同一帖子→申请→争议锁序。写事务使用READ_COMMITTED，锁后重读最新状态、确认记录及OPEN争议。双向确认不得停留WAITING_HANDOVER；完成与OPEN争议互斥。线索审核先锁父帖再锁线索，并以旧状态条件更新。真实MySQL反例回归见FinalAcceptanceIT，不能用顺序用例代替并发证明。

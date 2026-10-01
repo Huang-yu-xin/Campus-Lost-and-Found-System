@@ -16,24 +16,27 @@ public interface LostLeadMapper {
     @Select("SELECT * FROM lost_leads WHERE id = #{id}")
     LostLead findById(Long id);
 
-    @Select("SELECT * FROM lost_leads WHERE lost_post_id = #{postId} ORDER BY created_at DESC")
+    @Select("SELECT * FROM lost_leads WHERE id = #{id} FOR UPDATE")
+    LostLead lockById(Long id);
+
+    @Select("SELECT * FROM lost_leads WHERE lost_post_id = #{postId} ORDER BY created_at DESC, id DESC")
     List<LostLead> findByPost(Long postId);
 
-    @Select("SELECT * FROM lost_leads WHERE reporter_id = #{userId} ORDER BY created_at DESC LIMIT #{offset}, #{limit}")
+    @Select("SELECT * FROM lost_leads WHERE reporter_id = #{userId} ORDER BY created_at DESC, id DESC LIMIT #{offset}, #{limit}")
     List<LostLead> findByReporter(@Param("userId") Long userId, @Param("offset") long offset, @Param("limit") int limit);
 
     @Select("SELECT COUNT(*) FROM lost_leads WHERE reporter_id = #{userId}")
     long countByReporter(Long userId);
 
-    @Update("UPDATE lost_leads SET status = #{status} WHERE id = #{id}")
-    int updateStatus(@Param("id") Long id, @Param("status") String status);
+    @Update("UPDATE lost_leads SET status = #{status} WHERE id = #{id} AND status = #{from}")
+    int updateStatus(@Param("id") Long id, @Param("status") String status, @Param("from") String from);
 
     /** 寻物发布者收到的所有线索（联表 posts）。 */
     @Select("""
             SELECT l.id, l.lost_post_id, p.title AS post_title, l.reporter_id, l.body, l.status, l.created_at
             FROM lost_leads l JOIN posts p ON l.lost_post_id = p.id
             WHERE p.publisher_id = #{publisherId}
-            ORDER BY l.created_at DESC
+            ORDER BY l.created_at DESC, l.id DESC
             LIMIT #{offset}, #{limit}
             """)
     List<ReceivedLeadItem> findReceivedByPublisher(@Param("publisherId") Long publisherId,
