@@ -78,7 +78,9 @@ class MatchRealPairsIT {
         int hit1 = 0, hit5 = 0, hit20 = 0, inCand = 0;
         List<String> ranks = new ArrayList<>();
         for (Pair p : pairs) {
-            List<Post> cand = postMapper.findCandidates("FOUND", p.lostId(), props.getMatch().getMaxCandidates() * 5);
+            Post lost = postMapper.findById(p.lostId());
+            if (lost == null) continue;
+            List<Post> cand = matchService.candidatesFor(lost);
             if (cand.stream().anyMatch(x -> x.getId() == p.foundId())) inCand++;
             List<MatchCandidate> res = matchService.matchesFor(p.lostId());
             int rank = -1;

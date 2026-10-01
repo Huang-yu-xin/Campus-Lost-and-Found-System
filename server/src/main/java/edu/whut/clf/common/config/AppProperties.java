@@ -67,5 +67,9 @@ public class AppProperties {
         private int maxCandidates = 20;
         /** 入选最低分阈值。 */
         private double minScore = 0.10;
+        /** event_time 为空的候选帖：按发布时间回看多少天内仍可入选（第三臂兜底）。 */
+        private int nullEventWindowDays = 60;
+        /** 每个候选臂的安全上限（仅作保险阀，非排序依据；命中即打点告警）。 */
+        private int candidateArmLimit = 500;
     }
 }

@@ -200,9 +200,8 @@ public class MatchEvalHarness {
         for (long[] pair : seed.pairs()) {
             Post lost = postMapper.findById(pair[0]);
             Post found = postMapper.findById(pair[1]);
-            // 候选阶段召回（阈值前）：真值是否进入候选查询结果
-            List<Post> candidates = postMapper.findCandidates(
-                    "FOUND", lost.getId(), cfg.getMaxCandidates() * 5);
+            // 候选阶段召回（阈值前）：真值是否进入生产候选集（candidatesFor 与 matchesFor 同源）
+            List<Post> candidates = matchService.candidatesFor(lost);
             boolean inCand = candidates.stream().anyMatch(p -> p.getId().equals(found.getId()));
             if (inCand) inCandidates++;
 

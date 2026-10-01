@@ -93,14 +93,28 @@ public interface PostMapper {
     long countByPublisher(Long userId);
 
     // ---- 匹配候选（相反类型、ACTIVE）(FR-MATCH-01) ----
+    // P1：时间窗多臂候选。窗口与 T 子分的有效域一致（窗外候选 T=0，本就无价值）；
+    // 第二臂兜底 event_time 为空的候选（按发布时间回看 nullEventWindowDays 天）。
+    // 每臂 LIMIT 仅作保险阀；两臂按 event_time 是否为空天然不相交，仍由 Java 侧按 id 去重兜底。
     @Select("""
-            SELECT * FROM posts
-            WHERE status = 'ACTIVE' AND type = #{oppositeType} AND id <> #{selfId}
-            ORDER BY published_at DESC
-            LIMIT #{limit}
+            <script>
+            (SELECT * FROM posts
+              WHERE status = 'ACTIVE' AND type = #{oppositeType} AND id != #{selfId}
+                AND event_time &gt;= #{winStart} AND event_time &lt;= #{winEnd}
+              LIMIT #{armLimit})
+            UNION ALL
+            (SELECT * FROM posts
+              WHERE status = 'ACTIVE' AND type = #{oppositeType} AND id != #{selfId}
+                AND event_time IS NULL AND published_at &gt;= #{nullWinStart}
+              LIMIT #{armLimit})
+            </script>
             """)
-    List<Post> findCandidates(@Param("oppositeType") String oppositeType,
-                              @Param("selfId") Long selfId, @Param("limit") int limit);
+    List<Post> findCandidatesWindowed(@Param("oppositeType") String oppositeType,
+                                      @Param("selfId") Long selfId,
+                                      @Param("winStart") LocalDateTime winStart,
+                                      @Param("winEnd") LocalDateTime winEnd,
+                                      @Param("nullWinStart") LocalDateTime nullWinStart,
+                                      @Param("armLimit") int armLimit);
 
     // ---- 治理检索（FR-ADMIN-01）----
     @Select("""

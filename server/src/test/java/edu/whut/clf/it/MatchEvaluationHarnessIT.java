@@ -47,12 +47,20 @@ class MatchEvaluationHarnessIT {
         assertTrue(e.candidateRecall() >= 0 && e.candidateRecall() <= 1);
         assertTrue(e.hit20() <= e.candidateRecall() + 1e-9);
 
+        // 严格门禁（P1 时间窗候选落地后启用）：
+        // 真值拾取时间 = 丢失时间 + 1~7 天，必在 [t-24h, t+30d] 窗口内 → 候选召回必须接近全量；
+        // 进入候选后打分（均分 ~0.86）应把真值带进前 20。
+        assertTrue(e.candidateRecall() >= 0.95,
+                "候选阶段召回 " + e.candidateRecall() + " 低于 0.95 —— 时间窗候选臂失效");
+        assertTrue(e.hit20() >= 0.90,
+                "Hit@20 " + e.hit20() + " 低于 0.90 —— 打分/阈值回归");
+
         String extra = """
                 ## 说明
                 - 数据集：200 组合成正样本对（真值已知）+ 2400 干扰帖 + 40 用户，固定种子 %d。
-                - v0 基线结论（P1 未落地）：候选查询按发布时间取最新 100 条，正样本对散布 90 天窗口，
-                  因此候选阶段召回与 Hit@k 反映的是"截断伤害"，作为 P1 落地后的对照基线。
-                - 严格门禁（候选召回 ≥ 95%%）在 P1 合入后启用。
+                - P1 时间窗候选落地：候选召回与 Hit@k 反映事件时间窗选取的真实效果；
+                  同类别+同校区的相邻配对构成天然难例，由 T/K 子分区分。
+                - 对照基线（P1 前，"最新 100 条"截断）：候选召回 9.0%%、Hit@1 8.5%%、难负误报率 100%%。
                 """.formatted(seed);
         harness.writeReport(Path.of("target/match-eval/report-baseline.md"),
                 "匹配评估基线（合成配对）", e, extra);
