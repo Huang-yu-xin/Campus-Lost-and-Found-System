@@ -168,10 +168,16 @@ def gen_post():
                  ("HANDOVER" if r < 0.95 else ("WITHDRAWN" if r < 0.985 else "REMOVED"))))
     if age_days <= 7 and status in ("HANDOVER", "COMPLETED") and random.random() < 0.7:
         status = "ACTIVE"
+    # 终态帖补 closed_at（V4 点时重建需要）：发布后 6h~20 天内结束，封顶到模拟"现在"之前。
+    # 注意：4.6 事实链接回填会把被链接的 ACTIVE LOST 帖的 closed_at 覆盖为认领完成时间（更精确）。
+    if status in ("COMPLETED", "WITHDRAWN", "REMOVED"):
+        closed_at = min(published_at + dt.timedelta(hours=6 + r * 480), TODAY - dt.timedelta(hours=1))
+    else:
+        closed_at = None
     return dict(type=ptype, title=title, category=cat, category_code=CATEGORY_CODE[cat],
                 description=desc, campus=campus,
                 location=loc, event_time=event_time, published_at=published_at,
-                status=status, age_days=age_days)
+                status=status, age_days=age_days, closed_at=closed_at)
 
 # ---------------- 生成 SQL ----------------
 lines = []
@@ -211,7 +217,7 @@ lines.append(f"-- 2) 插入 {N_POSTS} 条发布（publisher_id = @users_base + �
 def flush_post_batch(batch):
     if not batch:
         return
-    lines.append("INSERT INTO posts (publisher_id, type, title, category, category_code, public_description, campus, event_location, event_time, published_at, status, version) VALUES")
+    lines.append("INSERT INTO posts (publisher_id, type, title, category, category_code, public_description, campus, event_location, event_time, published_at, closed_at, status, version) VALUES")
     lines.append(",\n".join(batch) + ";")
 
 batch = []
@@ -219,7 +225,8 @@ for n, p in enumerate(posts):
     k = (n % N_USERS) + 1
     batch.append(
         f"(@users_base + {k}, '{p['type']}', {q(p['title'])}, {q(p['category'])}, {q(p['category_code'])}, {q(p['description'])}, "
-        f"{q(p['campus'])}, {q(p['location'])}, '{fmt(p['event_time'])}', '{fmt(p['published_at'])}', '{p['status']}', 0)"
+        f"{q(p['campus'])}, {q(p['location'])}, '{fmt(p['event_time'])}', '{fmt(p['published_at'])}', "
+        f"{'NULL' if p['closed_at'] is None else chr(39) + fmt(p['closed_at']) + chr(39)}, '{p['status']}', 0)"
     )
     if len(batch) == 500:
         flush_post_batch(batch); batch = []
