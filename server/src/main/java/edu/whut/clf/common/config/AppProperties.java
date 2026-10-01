@@ -17,12 +17,14 @@ public class AppProperties {
     private CampusIdentity campusIdentity = new CampusIdentity();
     private Wechat wechat = new Wechat();
     private File file = new File();
+    private Backup backup = new Backup();
     private Match match = new Match();
 
     @Data
     public static class Auth {
         private long accessTokenTtlMinutes = 120;
-        private long refreshTokenTtlDays = 7;
+        // D16(P2-16)：refreshTokenTtlDays 已删除——当前续期采用"签发新短期 token + 撤销旧会话"模型，
+        // 无独立 refresh token TTL；sessions 以 access token 的 expires_at 为准。
         private String jwtSecret = "dev-only-secret-change-me";
     }
 
@@ -50,6 +52,14 @@ public class AppProperties {
         private int maxSizeMb = 5;
         private int maxCountPerPost = 6;
         private String allowedMime = "image/jpeg,image/png,image/webp";
+        /** D13/R6：孤儿文件定时清理开关（删除 bound=0 且超 24h 的未绑定上传）。 */
+        private boolean orphanCleanupEnabled = true;
+    }
+
+    @Data
+    public static class Backup {
+        /** D13/R7：备份输出目录（原硬编码 "backups"，现配置化）。 */
+        private String dir = "./backups";
     }
 
     /** 匹配权重与阈值（集中配置，见 D-05）。S = wCategory*C + wLocation*L + wTime*T + wKeyword*K。 */

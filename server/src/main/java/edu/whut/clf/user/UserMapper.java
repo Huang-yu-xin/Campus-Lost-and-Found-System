@@ -37,7 +37,7 @@ public interface UserMapper {
             LIMIT #{offset}, #{limit}
             </script>
             """)
-    List<User> search(@Param("keyword") String keyword, @Param("offset") int offset, @Param("limit") int limit);
+    List<User> search(@Param("keyword") String keyword, @Param("offset") long offset, @Param("limit") int limit);
 
     @Select("""
             <script>

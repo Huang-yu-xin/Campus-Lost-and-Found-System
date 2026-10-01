@@ -7,6 +7,8 @@ import edu.whut.clf.common.error.ErrorCode;
 import edu.whut.clf.common.security.AuthContext;
 import edu.whut.clf.common.security.Principal;
 import edu.whut.clf.file.model.StoredFile;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -27,19 +29,27 @@ import java.util.UUID;
 @Service
 public class FileService {
 
+    private static final Logger orphanLog = LoggerFactory.getLogger(FileService.class);
+
     private final AppProperties props;
     private final FileMapper fileMapper;
+    private final edu.whut.clf.user.UserMapper userMapper;
     private final List<FilePrivateAccessChecker> checkers;
     private final Set<String> allowedMime;
 
-    public FileService(AppProperties props, FileMapper fileMapper, List<FilePrivateAccessChecker> checkers) {
+    // 直接注入 UserMapper（非 UserService）做受限校验：UserService 已依赖 FileService(A6 头像校验)，
+    // 若再反向依赖 UserService 会形成循环；UserMapper 为叶子依赖，安全。
+    public FileService(AppProperties props, FileMapper fileMapper,
+                       edu.whut.clf.user.UserMapper userMapper, List<FilePrivateAccessChecker> checkers) {
         this.props = props;
         this.fileMapper = fileMapper;
+        this.userMapper = userMapper;
         this.checkers = checkers;
         this.allowedMime = Set.of(props.getFile().getAllowedMime().split("\\s*,\\s*"));
     }
 
     public StoredFile upload(Long ownerId, MultipartFile multipart, String purposeRaw) {
+        requireNotRestricted(ownerId); // D6/R5：受限/停用用户不得上传文件
         FilePurpose purpose;
         try {
             purpose = FilePurpose.valueOf(purposeRaw);
@@ -115,7 +125,16 @@ public class FileService {
 
     private boolean canAccess(StoredFile file) {
         if ("PUBLIC".equals(file.getVisibility())) {
-            return true;
+            // D4(P2-4)：PUBLIC 但尚未绑定业务对象(bound=0)时仅 owner/admin 可见，
+            // 避免"上传即公开"把未发布图片暴露给任意人（枚举面）
+            if (Boolean.TRUE.equals(file.getBound())) {
+                return true;
+            }
+            Principal pub = AuthContext.current();
+            if (pub == null) {
+                return false;
+            }
+            return pub.isAdmin() || file.getOwnerId().equals(pub.userId());
         }
         Principal p = AuthContext.current();
         if (p == null) {
@@ -175,6 +194,19 @@ public class FileService {
         return unique;
     }
 
+    /** 受限/停用用户拒绝写操作（与 UserService.requireNotRestricted 同口径，避免循环依赖故内联）。 */
+    private void requireNotRestricted(Long userId) {
+        edu.whut.clf.user.model.User u = userMapper.findById(userId);
+        if (u == null) {
+            throw BusinessException.of(ErrorCode.NOT_FOUND);
+        }
+        String st = u.getStatus();
+        if (edu.whut.clf.common.enums.UserStatus.RESTRICTED.name().equals(st)
+                || edu.whut.clf.common.enums.UserStatus.DISABLED.name().equals(st)) {
+            throw BusinessException.of(ErrorCode.USER_RESTRICTED);
+        }
+    }
+
     public void markBound(Long fileId) {
         fileMapper.markBound(fileId);
     }
@@ -182,6 +214,30 @@ public class FileService {
     /** 释放绑定（替换语义更新时先释放旧文件，使其可被重新绑定或被孤儿清理回收）。 */
     public void markUnbound(Long fileId) {
         fileMapper.markUnbound(fileId);
+    }
+
+    /**
+     * D13/R6：清理孤儿文件——删除 bound=0 且 created_at &lt; now-24h 的 DB 行与物理文件。
+     * 物理删除失败只记日志不中断（下次重试）；返回清理的行数。由定时任务调用。
+     */
+    public int cleanupOrphanFiles() {
+        java.time.LocalDateTime cutoff = java.time.LocalDateTime.now().minusHours(24);
+        List<StoredFile> orphans = fileMapper.findOrphans(cutoff);
+        int removed = 0;
+        for (StoredFile f : orphans) {
+            try {
+                Path p = Paths.get(props.getFile().getStorageRoot()).resolve(f.getStorageKey());
+                Files.deleteIfExists(p);
+            } catch (IOException e) {
+                orphanLog.warn("orphan cleanup: delete physical file failed id={} key={}", f.getId(), f.getStorageKey());
+            }
+            fileMapper.deleteById(f.getId());
+            removed++;
+        }
+        if (removed > 0) {
+            orphanLog.info("orphan cleanup: removed {} unbound file(s) older than 24h", removed);
+        }
+        return removed;
     }
 
     /** 依 magic bytes 识别图片真实类型；非图片返回 null。 */

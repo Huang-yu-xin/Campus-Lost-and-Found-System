@@ -79,7 +79,7 @@ public interface PostMapper {
     List<Post> searchPublic(@Param("keyword") String keyword, @Param("type") String type,
                             @Param("category") String category, @Param("campus") String campus,
                             @Param("eventFrom") LocalDateTime eventFrom, @Param("eventTo") LocalDateTime eventTo,
-                            @Param("offset") int offset, @Param("limit") int limit);
+                            @Param("offset") long offset, @Param("limit") int limit);
 
     @Select("""
             <script>
@@ -103,7 +103,7 @@ public interface PostMapper {
 
     // ---- 我的发布（FR-POST-04）----
     @Select("SELECT * FROM posts WHERE publisher_id = #{userId} ORDER BY created_at DESC LIMIT #{offset}, #{limit}")
-    List<Post> findByPublisher(@Param("userId") Long userId, @Param("offset") int offset, @Param("limit") int limit);
+    List<Post> findByPublisher(@Param("userId") Long userId, @Param("offset") long offset, @Param("limit") int limit);
 
     @Select("SELECT COUNT(*) FROM posts WHERE publisher_id = #{userId}")
     long countByPublisher(Long userId);
@@ -177,7 +177,7 @@ public interface PostMapper {
             </script>
             """)
     List<Post> adminSearch(@Param("status") String status, @Param("type") String type,
-                           @Param("offset") int offset, @Param("limit") int limit);
+                           @Param("offset") long offset, @Param("limit") int limit);
 
     @Select("""
             <script>

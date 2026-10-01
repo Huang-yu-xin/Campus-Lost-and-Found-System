@@ -20,7 +20,7 @@ public interface LostLeadMapper {
     List<LostLead> findByPost(Long postId);
 
     @Select("SELECT * FROM lost_leads WHERE reporter_id = #{userId} ORDER BY created_at DESC LIMIT #{offset}, #{limit}")
-    List<LostLead> findByReporter(@Param("userId") Long userId, @Param("offset") int offset, @Param("limit") int limit);
+    List<LostLead> findByReporter(@Param("userId") Long userId, @Param("offset") long offset, @Param("limit") int limit);
 
     @Select("SELECT COUNT(*) FROM lost_leads WHERE reporter_id = #{userId}")
     long countByReporter(Long userId);
@@ -37,7 +37,7 @@ public interface LostLeadMapper {
             LIMIT #{offset}, #{limit}
             """)
     List<ReceivedLeadItem> findReceivedByPublisher(@Param("publisherId") Long publisherId,
-                                                   @Param("offset") int offset, @Param("limit") int limit);
+                                                   @Param("offset") long offset, @Param("limit") int limit);
 
     @Select("SELECT COUNT(*) FROM lost_leads l JOIN posts p ON l.lost_post_id = p.id WHERE p.publisher_id = #{publisherId}")
     long countReceivedByPublisher(Long publisherId);

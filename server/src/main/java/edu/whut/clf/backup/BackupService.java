@@ -5,6 +5,7 @@ import edu.whut.clf.backup.model.BackupRecord;
 import edu.whut.clf.common.config.AppProperties;
 import edu.whut.clf.common.security.Principal;
 import edu.whut.clf.common.web.PageResult;
+import edu.whut.clf.common.web.Pageable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -46,7 +47,7 @@ public class BackupService {
 
         try {
             Path storageRoot = Paths.get(props.getFile().getStorageRoot());
-            Path backupDir = Paths.get("backups", "backup_" + rec.getId() + "_"
+            Path backupDir = Paths.get(props.getBackup().getDir(), "backup_" + rec.getId() + "_"
                     + System.currentTimeMillis());
             Files.createDirectories(backupDir);
 
@@ -79,10 +80,22 @@ public class BackupService {
     }
 
     public PageResult<BackupRecord> list(int page, int pageSize) {
-        int p = Math.max(1, page);
-        int size = pageSize <= 0 || pageSize > 100 ? 20 : pageSize;
-        List<BackupRecord> items = mapper.list((p - 1) * size, size);
-        return PageResult.of(items, mapper.count(), p, size);
+        Pageable pg = Pageable.of(page, pageSize);
+        List<BackupRecord> items = mapper.list(pg.offset(), pg.size());
+        return PageResult.of(items, mapper.count(), pg.page(), pg.size());
+    }
+
+    /**
+     * D13/R7：启动时把超时（&gt;1h）仍 RUNNING 的记录置 FAILED，清理进程崩溃遗留的僵尸批次。
+     * 返回置为 FAILED 的行数。
+     */
+    public int failTimedOutRunning() {
+        LocalDateTime cutoff = LocalDateTime.now().minusHours(1);
+        int n = mapper.failRunningBefore(cutoff, LocalDateTime.now());
+        if (n > 0) {
+            log.warn("backup: marked {} timed-out RUNNING record(s) as FAILED", n);
+        }
+        return n;
     }
 
     private void copyTree(Path src, Path dst, MessageDigest md, AtomicLong count) throws IOException {

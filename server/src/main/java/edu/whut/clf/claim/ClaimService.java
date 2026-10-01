@@ -7,6 +7,7 @@ import edu.whut.clf.common.error.BusinessException;
 import edu.whut.clf.common.error.ErrorCode;
 import edu.whut.clf.common.security.Principal;
 import edu.whut.clf.common.web.PageResult;
+import edu.whut.clf.common.web.Pageable;
 import edu.whut.clf.audit.AuditService;
 import edu.whut.clf.file.FileService;
 import edu.whut.clf.handover.HandoverConfirmationMapper;
@@ -122,20 +123,18 @@ public class ClaimService {
     }
 
     public PageResult<ClaimSummary> myClaims(Long userId, int page, int pageSize) {
-        int p = Math.max(1, page);
-        int size = pageSize <= 0 || pageSize > 100 ? 20 : pageSize;
-        List<Claim> list = claimMapper.findByApplicant(userId, (p - 1) * size, size);
+        Pageable pg = Pageable.of(page, pageSize);
+        List<Claim> list = claimMapper.findByApplicant(userId, pg.offset(), pg.size());
         long total = claimMapper.countByApplicant(userId);
-        return PageResult.of(list.stream().map(this::toSummary).toList(), total, p, size);
+        return PageResult.of(list.stream().map(this::toSummary).toList(), total, pg.page(), pg.size());
     }
 
     /** 我作为发布者收到的所有申请（B10 / FR-CLAIM-02）。 */
     public PageResult<edu.whut.clf.claim.dto.ReceivedClaimItem> receivedClaims(Long userId, int page, int pageSize) {
-        int p = Math.max(1, page);
-        int size = pageSize <= 0 || pageSize > 100 ? 20 : pageSize;
-        var items = claimMapper.findReceivedByPublisher(userId, (p - 1) * size, size);
+        Pageable pg = Pageable.of(page, pageSize);
+        var items = claimMapper.findReceivedByPublisher(userId, pg.offset(), pg.size());
         long total = claimMapper.countReceivedByPublisher(userId);
-        return PageResult.of(items, total, p, size);
+        return PageResult.of(items, total, pg.page(), pg.size());
     }
 
     public List<ClaimSummary> postClaims(Long postId, Long userId) {
@@ -256,7 +255,8 @@ public class ClaimService {
         boolean isApplicant = Objects.equals(claim.getApplicantId(), userId);
         boolean isPublisher = Objects.equals(post.getPublisherId(), userId);
         if (!isApplicant && !isPublisher) {
-            throw BusinessException.of(ErrorCode.FORBIDDEN);
+            // D10/R3：非参与方 404 防枚举（与 confirmHandover 同口径）
+            throw BusinessException.of(ErrorCode.HANDOVER_NOT_PARTICIPANT);
         }
         if (!ClaimStatus.WAITING_HANDOVER.name().equals(claim.getStatus())) {
             throw BusinessException.of(ErrorCode.CLAIM_STATE_INVALID);
@@ -271,6 +271,9 @@ public class ClaimService {
         }
         // 招领恢复为可申请
         postService.requireTransition(post.getId(), PostStatus.HANDOVER, PostStatus.ACTIVE);
+        // D11/R9：取消交接审计（metadata 含 reason）
+        auditService.record(userId, Principal.ROLE_USER, "HANDOVER_CANCELLED", "CLAIM", claimId,
+                "SUCCESS", "{\"reason\":" + jsonString(reason) + "}");
     }
 
     // ================== V4：认领完成 → 寻物帖闭环链接 ==================
@@ -411,6 +414,14 @@ public class ClaimService {
     private boolean hasOpenDispute(Long claimId) {
         ClaimDisputeGuard guard = disputeGuard.getIfAvailable();
         return guard != null && guard.hasOpenDispute(claimId);
+    }
+
+    /** 把字符串安全编码为 JSON 值（null→null 字面量；转义引号与反斜杠），用于审计 metadata。 */
+    private static String jsonString(String s) {
+        if (s == null) {
+            return "null";
+        }
+        return "\"" + s.replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
     }
 
     private ClaimSummary toSummary(Claim c) {

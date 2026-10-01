@@ -4,8 +4,10 @@ import com.fasterxml.jackson.databind.JsonNode;
 import edu.whut.clf.common.config.AppProperties;
 import edu.whut.clf.common.error.BusinessException;
 import edu.whut.clf.common.error.ErrorCode;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.util.UriComponentsBuilder;
 
 /**
  * 微信 code2session：用小程序临时 code 换取 openid。
@@ -16,10 +18,15 @@ import org.springframework.web.client.RestClient;
 public class WechatClient {
 
     private final AppProperties props;
-    private final RestClient restClient = RestClient.create();
+    private final RestClient restClient;
 
     public WechatClient(AppProperties props) {
         this.props = props;
+        // D3(P2-3)：外呼设置连接/读取超时各 3s，避免微信侧慢响应长时间占用线程/连接
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(3000);
+        factory.setReadTimeout(3000);
+        this.restClient = RestClient.builder().requestFactory(factory).build();
     }
 
     public boolean isConfigured() {
@@ -34,11 +41,14 @@ public class WechatClient {
         if (!notBlank(jsCode)) {
             throw new BusinessException(ErrorCode.INVALID_ARGUMENT, "缺少登录凭证 code");
         }
-        String url = "https://api.weixin.qq.com/sns/jscode2session"
-                + "?appid=" + props.getWechat().getAppid()
-                + "&secret=" + props.getWechat().getAppsecret()
-                + "&js_code=" + jsCode
-                + "&grant_type=authorization_code";
+        // D3：用 UriComponentsBuilder 编码查询参数，避免 code 中特殊字符破坏 URL
+        String url = UriComponentsBuilder.fromHttpUrl("https://api.weixin.qq.com/sns/jscode2session")
+                .queryParam("appid", props.getWechat().getAppid())
+                .queryParam("secret", props.getWechat().getAppsecret())
+                .queryParam("js_code", jsCode)
+                .queryParam("grant_type", "authorization_code")
+                .encode()
+                .toUriString();
         JsonNode body;
         try {
             body = restClient.get().uri(url).retrieve().body(JsonNode.class);

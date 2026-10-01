@@ -2,6 +2,7 @@ package edu.whut.clf.post.dto;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.PastOrPresent;
 import jakarta.validation.constraints.Size;
 
 import java.time.LocalDateTime;
@@ -16,7 +17,7 @@ public class PostDtos {
             @NotBlank @Size(max = 2000) String publicDescription,
             @Size(max = 64) String campus,
             @Size(max = 128) String eventLocation,
-            LocalDateTime eventTime,
+            @PastOrPresent LocalDateTime eventTime,
             List<Long> imageFileIds) {}
 
     public record UpdatePostRequest(
@@ -25,7 +26,7 @@ public class PostDtos {
             @Size(max = 2000) String publicDescription,
             @Size(max = 64) String campus,
             @Size(max = 128) String eventLocation,
-            LocalDateTime eventTime,
+            @PastOrPresent LocalDateTime eventTime,
             List<Long> imageFileIds) {}
 
     public record PostSummary(

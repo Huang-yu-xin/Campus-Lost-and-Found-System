@@ -9,6 +9,8 @@ import edu.whut.clf.common.error.BusinessException;
 import edu.whut.clf.common.error.ErrorCode;
 import edu.whut.clf.common.security.Principal;
 import edu.whut.clf.common.web.PageResult;
+import edu.whut.clf.common.web.Pageable;
+import edu.whut.clf.dispute.DisputeMapper;
 import edu.whut.clf.post.PostMapper;
 import edu.whut.clf.post.model.Post;
 import edu.whut.clf.user.UserMapper;
@@ -26,25 +28,27 @@ public class AdminGovernanceService {
     private final ClaimMapper claimMapper;
     private final UserMapper userMapper;
     private final ModerationActionMapper moderationMapper;
+    private final DisputeMapper disputeMapper;
     private final AuditService auditService;
 
     public AdminGovernanceService(PostMapper postMapper, ClaimMapper claimMapper, UserMapper userMapper,
-                                  ModerationActionMapper moderationMapper, AuditService auditService) {
+                                  ModerationActionMapper moderationMapper, DisputeMapper disputeMapper,
+                                  AuditService auditService) {
         this.postMapper = postMapper;
         this.claimMapper = claimMapper;
         this.userMapper = userMapper;
         this.moderationMapper = moderationMapper;
+        this.disputeMapper = disputeMapper;
         this.auditService = auditService;
     }
 
     // ---- 信息治理 ----
 
     public PageResult<Post> listPosts(String status, String type, int page, int pageSize) {
-        int p = Math.max(1, page);
-        int size = pageSize <= 0 || pageSize > 100 ? 20 : pageSize;
-        List<Post> items = postMapper.adminSearch(status, type, (p - 1) * size, size);
+        Pageable pg = Pageable.of(page, pageSize);
+        List<Post> items = postMapper.adminSearch(status, type, pg.offset(), pg.size());
         long total = postMapper.adminSearchCount(status, type);
-        return PageResult.of(items, total, p, size);
+        return PageResult.of(items, total, pg.page(), pg.size());
     }
 
     @Transactional
@@ -55,6 +59,11 @@ public class AdminGovernanceService {
         }
         if (PostStatus.REMOVED.name().equals(post.getStatus())) {
             throw new BusinessException(ErrorCode.CONFLICT, "该信息已被下架");
+        }
+        // D7(P2-7)：目标帖存在 OPEN 争议（经其 WAITING_HANDOVER 申请）时拒绝下架，提示先裁决，
+        // 避免下架连带关闭申请而绕过争议裁决流程
+        if (disputeMapper.countOpenByPost(postId) > 0) {
+            throw new BusinessException(ErrorCode.CONFLICT, "该信息存在未决争议，请先裁决争议后再下架");
         }
         String before = post.getStatus();
         postMapper.forceStatus(postId, PostStatus.REMOVED.name());
@@ -90,11 +99,10 @@ public class AdminGovernanceService {
     // ---- 用户治理 ----
 
     public PageResult<User> listUsers(String keyword, int page, int pageSize) {
-        int p = Math.max(1, page);
-        int size = pageSize <= 0 || pageSize > 100 ? 20 : pageSize;
-        List<User> items = userMapper.search(keyword, (p - 1) * size, size);
+        Pageable pg = Pageable.of(page, pageSize);
+        List<User> items = userMapper.search(keyword, pg.offset(), pg.size());
         long total = userMapper.countSearch(keyword);
-        return PageResult.of(items, total, p, size);
+        return PageResult.of(items, total, pg.page(), pg.size());
     }
 
     @Transactional

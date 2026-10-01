@@ -1,12 +1,15 @@
 package edu.whut.clf.post;
 
+import edu.whut.clf.audit.AuditService;
 import edu.whut.clf.common.enums.FilePurpose;
 import edu.whut.clf.match.CategoryDictionary;
 import edu.whut.clf.common.enums.PostStatus;
 import edu.whut.clf.common.enums.PostType;
 import edu.whut.clf.common.error.BusinessException;
 import edu.whut.clf.common.error.ErrorCode;
+import edu.whut.clf.common.security.Principal;
 import edu.whut.clf.common.web.PageResult;
+import edu.whut.clf.common.web.Pageable;
 import edu.whut.clf.file.FileService;
 import edu.whut.clf.post.dto.PostDtos.*;
 import edu.whut.clf.post.model.Post;
@@ -19,7 +22,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 @Service
 public class PostService {
@@ -30,16 +35,18 @@ public class PostService {
     private final UserService userService;
     private final ObjectProvider<PostClaimGuard> claimGuard;
     private final CategoryDictionary categoryDictionary;
+    private final AuditService auditService;
 
     public PostService(PostMapper postMapper, PostImageMapper imageMapper, FileService fileService,
                        UserService userService, ObjectProvider<PostClaimGuard> claimGuard,
-                       CategoryDictionary categoryDictionary) {
+                       CategoryDictionary categoryDictionary, AuditService auditService) {
         this.postMapper = postMapper;
         this.imageMapper = imageMapper;
         this.fileService = fileService;
         this.userService = userService;
         this.claimGuard = claimGuard;
         this.categoryDictionary = categoryDictionary;
+        this.auditService = auditService;
     }
 
     @Transactional
@@ -51,6 +58,7 @@ public class PostService {
         } catch (Exception e) {
             throw new BusinessException(ErrorCode.INVALID_ARGUMENT, "type 必须为 LOST 或 FOUND");
         }
+        validateEventTime(req.eventTime());
         Post p = new Post();
         p.setPublisherId(userId);
         p.setType(type.name());
@@ -70,15 +78,13 @@ public class PostService {
 
     public PageResult<PostSummary> publicList(String keyword, String type, String category, String campus,
                                               LocalDateTime eventFrom, LocalDateTime eventTo, int page, int pageSize) {
-        int p = Math.max(1, page);
-        int size = pageSize <= 0 || pageSize > 100 ? 20 : pageSize;
+        Pageable pg = Pageable.of(page, pageSize);
         String normalizedType = normalizeType(type);
-        int offset = (p - 1) * size;
         List<Post> posts = postMapper.searchPublic(blankToNull(keyword), normalizedType,
-                blankToNull(category), blankToNull(campus), eventFrom, eventTo, offset, size);
+                blankToNull(category), blankToNull(campus), eventFrom, eventTo, pg.offset(), pg.size());
         long total = postMapper.countPublic(blankToNull(keyword), normalizedType,
                 blankToNull(category), blankToNull(campus), eventFrom, eventTo);
-        return PageResult.of(posts.stream().map(this::toSummary).toList(), total, p, size);
+        return PageResult.of(toSummaries(posts), total, pg.page(), pg.size());
     }
 
     public PostDetail detail(Long postId, Long currentUserId) {
@@ -104,12 +110,10 @@ public class PostService {
     }
 
     public PageResult<PostSummary> myPosts(Long userId, int page, int pageSize) {
-        int p = Math.max(1, page);
-        int size = pageSize <= 0 || pageSize > 100 ? 20 : pageSize;
-        int offset = (p - 1) * size;
-        List<Post> posts = postMapper.findByPublisher(userId, offset, size);
+        Pageable pg = Pageable.of(page, pageSize);
+        List<Post> posts = postMapper.findByPublisher(userId, pg.offset(), pg.size());
         long total = postMapper.countByPublisher(userId);
-        return PageResult.of(posts.stream().map(this::toSummary).toList(), total, p, size);
+        return PageResult.of(toSummaries(posts), total, pg.page(), pg.size());
     }
 
     @Transactional
@@ -130,7 +134,7 @@ public class PostService {
         if (req.publicDescription() != null) post.setPublicDescription(req.publicDescription().trim());
         if (req.campus() != null) post.setCampus(req.campus());
         if (req.eventLocation() != null) post.setEventLocation(req.eventLocation());
-        if (req.eventTime() != null) post.setEventTime(req.eventTime());
+        if (req.eventTime() != null) { validateEventTime(req.eventTime()); post.setEventTime(req.eventTime()); }
         postMapper.updateEditable(post);
         if (req.imageFileIds() != null && !locked) {
             bindImages(postId, userId, req.imageFileIds());
@@ -140,8 +144,10 @@ public class PostService {
 
     @Transactional
     public void withdraw(Long postId, Long userId) {
-        Post post = requireOwned(postId, userId);
-        if (!PostStatus.ACTIVE.name().equals(post.getStatus())) {
+        requireOwned(postId, userId);
+        // D17：锁帖后以 FOR UPDATE 权威读复核状态与有效申请，消除"撤回与新申请"竞态产生的孤儿 PENDING
+        Post locked = lockForUpdate(postId);
+        if (!PostStatus.ACTIVE.name().equals(locked.getStatus())) {
             throw BusinessException.of(ErrorCode.POST_NOT_EDITABLE);
         }
         if (hasActiveClaim(postId)) {
@@ -159,10 +165,20 @@ public class PostService {
         if (!PostType.LOST.name().equals(post.getType())) {
             throw new BusinessException(ErrorCode.CONFLICT, "仅寻物信息可标记已找回");
         }
+        // D17：锁帖后权威读复核（与 withdraw/resolve-lost 同模式）
+        Post locked = lockForUpdate(postId);
+        if (!PostStatus.ACTIVE.name().equals(locked.getStatus())) {
+            throw BusinessException.of(ErrorCode.CONFLICT);
+        }
+        if (hasActiveClaim(postId)) {
+            throw new BusinessException(ErrorCode.CONFLICT, "存在有效申请，请先处理后再标记找回");
+        }
         int n = postMapper.changeStatus(postId, PostStatus.ACTIVE.name(), PostStatus.COMPLETED.name());
         if (n == 0) {
             throw BusinessException.of(ErrorCode.CONFLICT);
         }
+        // D12/R9：标记已找回审计
+        auditService.record(userId, Principal.ROLE_USER, "LOST_MARK_FOUND", "POST", postId, "SUCCESS", null);
     }
 
     // ---- 供其它模块在同一事务内调用的领域方法 ----
@@ -268,11 +284,23 @@ public class PostService {
         }
     }
 
-    private PostSummary toSummary(Post post) {
-        List<Long> imageIds = imageMapper.findByPost(post.getId()).stream().map(PostImage::getFileId).toList();
-        return new PostSummary(post.getId(), post.getType(), post.getTitle(), post.getCategory(),
-                post.getCampus(), post.getEventLocation(), post.getEventTime(), post.getPublishedAt(),
-                post.getStatus(), imageIds);
+    /**
+     * D2(P2-2)：列表摘要图片改批量取（findByPostIds 一次 + 分组 Map），消除逐帖 N+1 查询。
+     * 与 MatchService 的候选图片取法同法。
+     */
+    private List<PostSummary> toSummaries(List<Post> posts) {
+        if (posts.isEmpty()) {
+            return List.of();
+        }
+        List<Long> ids = posts.stream().map(Post::getId).toList();
+        Map<Long, List<Long>> byPost = imageMapper.findByPostIds(ids).stream()
+                .collect(Collectors.groupingBy(PostImage::getPostId,
+                        Collectors.mapping(PostImage::getFileId, Collectors.toList())));
+        return posts.stream()
+                .map(post -> new PostSummary(post.getId(), post.getType(), post.getTitle(), post.getCategory(),
+                        post.getCampus(), post.getEventLocation(), post.getEventTime(), post.getPublishedAt(),
+                        post.getStatus(), byPost.getOrDefault(post.getId(), List.of())))
+                .toList();
     }
 
     private String normalizeType(String type) {
@@ -288,5 +316,14 @@ public class PostService {
 
     private String blankToNull(String s) {
         return s == null || s.isBlank() ? null : s;
+    }
+
+    /** D8(P2-8)：事件时间下界校验（@PastOrPresent 管上界，这里管下界）。 */
+    private static final LocalDateTime EVENT_TIME_FLOOR = LocalDateTime.of(2000, 1, 1, 0, 0);
+
+    private void validateEventTime(LocalDateTime eventTime) {
+        if (eventTime != null && eventTime.isBefore(EVENT_TIME_FLOOR)) {
+            throw new BusinessException(ErrorCode.INVALID_ARGUMENT, "事件时间不得早于 2000-01-01");
+        }
     }
 }

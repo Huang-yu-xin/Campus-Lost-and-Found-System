@@ -6,7 +6,10 @@ import edu.whut.clf.common.enums.PostStatus;
 import edu.whut.clf.common.enums.PostType;
 import edu.whut.clf.common.error.BusinessException;
 import edu.whut.clf.common.error.ErrorCode;
+import edu.whut.clf.common.security.Principal;
 import edu.whut.clf.common.web.PageResult;
+import edu.whut.clf.common.web.Pageable;
+import edu.whut.clf.audit.AuditService;
 import edu.whut.clf.file.FileService;
 import edu.whut.clf.lead.dto.LeadDtos.*;
 import edu.whut.clf.lead.model.LostLead;
@@ -15,6 +18,9 @@ import edu.whut.clf.post.model.Post;
 import edu.whut.clf.user.UserService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.EnumSet;
+import java.util.Map;
 
 import java.util.List;
 import java.util.Objects;
@@ -28,14 +34,25 @@ public class LeadService {
     private final PostService postService;
     private final UserService userService;
     private final FileService fileService;
+    private final AuditService auditService;
+
+    // R8：线索状态转移白名单。SUBMITTED→{VIEWED,HELPFUL,CLOSED}；VIEWED→{HELPFUL,CLOSED}；
+    // HELPFUL→{CLOSED}；CLOSED→∅。非法转移 409。
+    private static final Map<LeadStatus, EnumSet<LeadStatus>> ALLOWED = Map.of(
+            LeadStatus.SUBMITTED, EnumSet.of(LeadStatus.VIEWED, LeadStatus.HELPFUL, LeadStatus.CLOSED),
+            LeadStatus.VIEWED, EnumSet.of(LeadStatus.HELPFUL, LeadStatus.CLOSED),
+            LeadStatus.HELPFUL, EnumSet.of(LeadStatus.CLOSED),
+            LeadStatus.CLOSED, EnumSet.noneOf(LeadStatus.class));
 
     public LeadService(LostLeadMapper leadMapper, LeadEvidenceFileMapper evidenceMapper,
-                       PostService postService, UserService userService, FileService fileService) {
+                       PostService postService, UserService userService, FileService fileService,
+                       AuditService auditService) {
         this.leadMapper = leadMapper;
         this.evidenceMapper = evidenceMapper;
         this.postService = postService;
         this.userService = userService;
         this.fileService = fileService;
+        this.auditService = auditService;
     }
 
     @Transactional
@@ -93,20 +110,18 @@ public class LeadService {
     }
 
     public PageResult<LeadItem> myLeads(Long userId, int page, int pageSize) {
-        int p = Math.max(1, page);
-        int size = pageSize <= 0 || pageSize > 100 ? 20 : pageSize;
-        List<LostLead> list = leadMapper.findByReporter(userId, (p - 1) * size, size);
+        Pageable pg = Pageable.of(page, pageSize);
+        List<LostLead> list = leadMapper.findByReporter(userId, pg.offset(), pg.size());
         long total = leadMapper.countByReporter(userId);
-        return PageResult.of(list.stream().map(l -> toItem(l, true)).toList(), total, p, size);
+        return PageResult.of(list.stream().map(l -> toItem(l, true)).toList(), total, pg.page(), pg.size());
     }
 
     /** 我作为寻物发布者收到的所有线索（B10 / FR-LEAD-02）。 */
     public PageResult<edu.whut.clf.lead.dto.ReceivedLeadItem> receivedLeads(Long userId, int page, int pageSize) {
-        int p = Math.max(1, page);
-        int size = pageSize <= 0 || pageSize > 100 ? 20 : pageSize;
-        var items = leadMapper.findReceivedByPublisher(userId, (p - 1) * size, size);
+        Pageable pg = Pageable.of(page, pageSize);
+        var items = leadMapper.findReceivedByPublisher(userId, pg.offset(), pg.size());
         long total = leadMapper.countReceivedByPublisher(userId);
-        return PageResult.of(items, total, p, size);
+        return PageResult.of(items, total, pg.page(), pg.size());
     }
 
     @Transactional
@@ -119,17 +134,27 @@ public class LeadService {
         if (!Objects.equals(post.getPublisherId(), userId)) {
             throw BusinessException.of(ErrorCode.FORBIDDEN);
         }
-        LeadStatus status;
+        LeadStatus target;
         try {
-            status = LeadStatus.valueOf(statusRaw);
+            target = LeadStatus.valueOf(statusRaw);
         } catch (Exception e) {
             throw new BusinessException(ErrorCode.INVALID_ARGUMENT, "非法线索状态");
         }
-        // 线索处理不擅自判定物品归属，仅记录处理进度
-        if (status == LeadStatus.SUBMITTED) {
-            throw new BusinessException(ErrorCode.INVALID_ARGUMENT, "不能回退为未处理");
+        // D9/R8：按白名单校验状态转移（线索处理不擅自判定物品归属，仅记录处理进度）
+        LeadStatus current;
+        try {
+            current = LeadStatus.valueOf(lead.getStatus());
+        } catch (Exception e) {
+            current = LeadStatus.SUBMITTED;
         }
-        leadMapper.updateStatus(leadId, status.name());
+        if (!ALLOWED.getOrDefault(current, EnumSet.noneOf(LeadStatus.class)).contains(target)) {
+            throw new BusinessException(ErrorCode.CONFLICT,
+                    "线索状态不可从 " + current.name() + " 转为 " + target.name());
+        }
+        leadMapper.updateStatus(leadId, target.name());
+        // D12/R9：线索处理审计（metadata 含新状态）
+        auditService.record(userId, Principal.ROLE_USER, "LEAD_REVIEW", "LEAD", leadId,
+                "SUCCESS", "{\"status\":\"" + target.name() + "\"}");
     }
 
     private LeadItem toItem(LostLead l, boolean includeEvidence) {

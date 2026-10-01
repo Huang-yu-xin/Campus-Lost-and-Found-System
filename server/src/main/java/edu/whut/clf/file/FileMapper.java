@@ -3,6 +3,9 @@ package edu.whut.clf.file;
 import edu.whut.clf.file.model.StoredFile;
 import org.apache.ibatis.annotations.*;
 
+import java.time.LocalDateTime;
+import java.util.List;
+
 @Mapper
 public interface FileMapper {
 
@@ -21,4 +24,11 @@ public interface FileMapper {
 
     @Update("UPDATE files SET bound = 0 WHERE id = #{id}")
     int markUnbound(Long id);
+
+    /** D13/R6：未绑定且早于 cutoff 的孤儿文件（上传后 24h 未绑定任何业务对象）。 */
+    @Select("SELECT * FROM files WHERE bound = 0 AND created_at < #{cutoff}")
+    List<StoredFile> findOrphans(@Param("cutoff") LocalDateTime cutoff);
+
+    @Delete("DELETE FROM files WHERE id = #{id}")
+    int deleteById(Long id);
 }

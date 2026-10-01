@@ -25,6 +25,11 @@ public interface DisputeMapper {
     @Select("SELECT COUNT(*) FROM disputes WHERE claim_id = #{claimId} AND status = 'OPEN'")
     long countOpenByClaim(Long claimId);
 
+    /** 目标帖是否存在 OPEN 争议（经其申请，D7 下架前校验）。 */
+    @Select("SELECT COUNT(*) FROM disputes d JOIN claims c ON d.claim_id = c.id "
+            + "WHERE c.post_id = #{postId} AND d.status = 'OPEN'")
+    long countOpenByPost(Long postId);
+
     @Select("""
             <script>
             SELECT * FROM disputes
@@ -35,7 +40,7 @@ public interface DisputeMapper {
             LIMIT #{offset}, #{limit}
             </script>
             """)
-    List<Dispute> adminSearch(@Param("status") String status, @Param("offset") int offset, @Param("limit") int limit);
+    List<Dispute> adminSearch(@Param("status") String status, @Param("offset") long offset, @Param("limit") int limit);
 
     @Select("""
             <script>

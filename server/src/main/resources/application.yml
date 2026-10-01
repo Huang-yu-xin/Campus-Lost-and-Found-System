@@ -45,7 +45,6 @@ springdoc:
 app:
   auth:
     access-token-ttl-minutes: ${ACCESS_TOKEN_TTL_MINUTES:120}
-    refresh-token-ttl-days: ${REFRESH_TOKEN_TTL_DAYS:7}
     jwt-secret: ${JWT_SECRET:dev-only-secret-change-me}
   mock-login:
     enabled: ${MOCK_LOGIN_ENABLED:false}
@@ -59,6 +58,9 @@ app:
     max-size-mb: ${FILE_MAX_SIZE_MB:5}
     max-count-per-post: ${FILE_MAX_COUNT_PER_POST:6}
     allowed-mime: ${FILE_ALLOWED_MIME:image/jpeg,image/png,image/webp}
+    orphan-cleanup-enabled: ${FILE_ORPHAN_CLEANUP:true}
+  backup:
+    dir: ${APP_BACKUP_DIR:./backups}
 
 logging:
   level:

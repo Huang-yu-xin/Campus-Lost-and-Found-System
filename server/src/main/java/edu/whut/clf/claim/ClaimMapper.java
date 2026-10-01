@@ -33,7 +33,7 @@ public interface ClaimMapper {
     List<Claim> findByPost(Long postId);
 
     @Select("SELECT * FROM claims WHERE applicant_id = #{userId} ORDER BY created_at DESC LIMIT #{offset}, #{limit}")
-    List<Claim> findByApplicant(@Param("userId") Long userId, @Param("offset") int offset, @Param("limit") int limit);
+    List<Claim> findByApplicant(@Param("userId") Long userId, @Param("offset") long offset, @Param("limit") int limit);
 
     @Select("SELECT COUNT(*) FROM claims WHERE applicant_id = #{userId}")
     long countByApplicant(Long userId);
@@ -80,7 +80,7 @@ public interface ClaimMapper {
             LIMIT #{offset}, #{limit}
             """)
     List<ReceivedClaimItem> findReceivedByPublisher(@Param("publisherId") Long publisherId,
-                                                    @Param("offset") int offset, @Param("limit") int limit);
+                                                    @Param("offset") long offset, @Param("limit") int limit);
 
     @Select("SELECT COUNT(*) FROM claims c JOIN posts p ON c.post_id = p.id WHERE p.publisher_id = #{publisherId}")
     long countReceivedByPublisher(Long publisherId);

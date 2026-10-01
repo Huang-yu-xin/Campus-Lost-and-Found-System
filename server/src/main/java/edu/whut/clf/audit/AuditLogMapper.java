@@ -27,7 +27,7 @@ public interface AuditLogMapper {
             </script>
             """)
     List<AuditLog> search(@Param("action") String action, @Param("targetType") String targetType,
-                          @Param("offset") int offset, @Param("limit") int limit);
+                          @Param("offset") long offset, @Param("limit") int limit);
 
     @Select("""
             <script>

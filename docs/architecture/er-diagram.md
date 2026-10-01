@@ -52,7 +52,7 @@ erDiagram
 | `moderation_actions` | admin_id, target_type/id, action, before/after_state | 持久化不可静默覆盖 |
 | `audit_logs` | actor, action, target, request_id, result, metadata(JSON) | 仅必要元数据，不含完整私密证明 |
 | `backup_records` | initiated_by, status, manifest_path, checksum, restore_verified_at | 备份+恢复验证记录 |
-| `idempotency_records` | actor_id, operation, request_key(唯一) | 过期清理 |
+| `idempotency_records` | actor_id, operation, request_key(唯一) | **预留，当前未引用**：认领等写操作幂等已由 DB 唯一约束（如 `uk_claim_active_applicant`）+ 状态条件更新保障，未启用 Idempotency-Key 头（裁决 R1） |
 
 ## 3. 索引（热点查询）
 

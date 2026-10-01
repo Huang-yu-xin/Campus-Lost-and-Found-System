@@ -50,7 +50,8 @@ public enum ErrorCode {
 
     // 交接
     HANDOVER_PAUSED_BY_DISPUTE(HttpStatus.CONFLICT, "存在未决争议，交接已暂停"),
-    HANDOVER_NOT_PARTICIPANT(HttpStatus.FORBIDDEN, "非交接参与方"),
+    // D10/R3：非参与方按 404 防枚举（错误码名保留，HTTP 由 403 改 404，与 detail/withdraw 同口径）
+    HANDOVER_NOT_PARTICIPANT(HttpStatus.NOT_FOUND, "非交接参与方"),
 
     // 线索
     LEAD_NOT_FOUND(HttpStatus.NOT_FOUND, "线索不存在"),

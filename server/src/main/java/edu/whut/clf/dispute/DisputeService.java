@@ -8,10 +8,12 @@ import edu.whut.clf.common.error.BusinessException;
 import edu.whut.clf.common.error.ErrorCode;
 import edu.whut.clf.common.security.Principal;
 import edu.whut.clf.common.web.PageResult;
+import edu.whut.clf.common.web.Pageable;
 import edu.whut.clf.dispute.dto.DisputeDtos.*;
 import edu.whut.clf.dispute.model.Dispute;
 import edu.whut.clf.file.FileService;
 import edu.whut.clf.post.PostService;
+import edu.whut.clf.user.UserService;
 import edu.whut.clf.audit.AuditService;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
@@ -33,22 +35,25 @@ public class DisputeService {
     private final ClaimMapper claimMapper;
     private final PostService postService;
     private final FileService fileService;
+    private final UserService userService;
     private final AuditService auditService;
 
     public DisputeService(DisputeMapper disputeMapper, DisputeEvidenceFileMapper evidenceMapper,
                           ClaimAccessService claimAccess, ClaimMapper claimMapper, PostService postService,
-                          FileService fileService, AuditService auditService) {
+                          FileService fileService, UserService userService, AuditService auditService) {
         this.disputeMapper = disputeMapper;
         this.evidenceMapper = evidenceMapper;
         this.claimAccess = claimAccess;
         this.claimMapper = claimMapper;
         this.postService = postService;
         this.fileService = fileService;
+        this.userService = userService;
         this.auditService = auditService;
     }
 
     @Transactional
     public DisputeView raise(Long claimId, Long userId, RaiseDisputeRequest req) {
+        userService.requireNotRestricted(userId); // D6/R5：受限用户不得发起争议
         ClaimAccessService.Participants pt = claimAccess.requireParticipant(claimId, userId);
         // 仅在有效交接期（WAITING_HANDOVER）可发起
         if (!ClaimStatus.WAITING_HANDOVER.name().equals(pt.claimStatus())) {
@@ -88,11 +93,10 @@ public class DisputeService {
     // ---- 管理端 ----
 
     public PageResult<AdminDisputeView> adminList(String status, int page, int pageSize) {
-        int p = Math.max(1, page);
-        int size = pageSize <= 0 || pageSize > 100 ? 20 : pageSize;
-        List<Dispute> items = disputeMapper.adminSearch(status, (p - 1) * size, size);
+        Pageable pg = Pageable.of(page, pageSize);
+        List<Dispute> items = disputeMapper.adminSearch(status, pg.offset(), pg.size());
         long total = disputeMapper.adminCount(status);
-        return PageResult.of(items.stream().map(d -> toAdminView(d, false)).toList(), total, p, size);
+        return PageResult.of(items.stream().map(d -> toAdminView(d, false)).toList(), total, pg.page(), pg.size());
     }
 
     public AdminDisputeView adminGet(Long disputeId) {

@@ -45,6 +45,12 @@ public class SessionService {
         return sessionMapper.countActive(hash(rawToken), LocalDateTime.now()) > 0;
     }
 
+    /** D14/P2-13：清理创建超过 30 天且已失效（已撤销或已过期）的会话行。返回删除行数。 */
+    public int purgeStaleSessions() {
+        LocalDateTime now = LocalDateTime.now();
+        return sessionMapper.deleteStale(now.minusDays(30), now);
+    }
+
     static String hash(String raw) {
         try {
             MessageDigest md = MessageDigest.getInstance("SHA-256");

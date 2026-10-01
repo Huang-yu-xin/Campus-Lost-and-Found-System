@@ -2,6 +2,7 @@ package edu.whut.clf.audit;
 
 import edu.whut.clf.audit.model.AuditLog;
 import edu.whut.clf.common.web.PageResult;
+import edu.whut.clf.common.web.Pageable;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -30,10 +31,9 @@ public class AuditService {
     }
 
     public PageResult<AuditLog> search(String action, String targetType, int page, int pageSize) {
-        int p = Math.max(1, page);
-        int size = pageSize <= 0 || pageSize > 100 ? 20 : pageSize;
-        List<AuditLog> items = mapper.search(action, targetType, (p - 1) * size, size);
+        Pageable pg = Pageable.of(page, pageSize);
+        List<AuditLog> items = mapper.search(action, targetType, pg.offset(), pg.size());
         long total = mapper.count(action, targetType);
-        return PageResult.of(items, total, p, size);
+        return PageResult.of(items, total, pg.page(), pg.size());
     }
 }
