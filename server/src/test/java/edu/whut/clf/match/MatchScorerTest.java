@@ -12,9 +12,10 @@ import static org.junit.jupiter.api.Assertions.*;
 /** 匹配打分纯单元测试（无需数据库）。验证分数可复算、异常时间降权、缺字段说明。 */
 class MatchScorerTest {
 
+    private final AppProperties.Match cfg = new AppProperties.Match();
     private final CategoryDictionary dictionary = new CategoryDictionary();
     private final TextTokenizer tokenizer = new TextTokenizer();
-    private final MatchScorer scorer = new MatchScorer(new AppProperties.Match(), dictionary, tokenizer);
+    private final MatchScorer scorer = new MatchScorer(cfg, dictionary, tokenizer);
 
     private Post post(String type, String category, String campus, String location,
                       LocalDateTime eventTime, String title, String desc) {
@@ -42,8 +43,9 @@ class MatchScorerTest {
         assertTrue(r.time() > 0.9, "同日拾取时间分应接近满分");
         assertTrue(r.keyword() > 0, "关键词应有重合");
         assertTrue(r.score() > 0.6, "综合分应较高: " + r.score());
-        // 可复算：加权和一致
-        double expected = 0.40 * r.category() + 0.25 * r.location() + 0.20 * r.time() + 0.15 * r.keyword();
+        // 可复算：加权和一致（权重读配置，调参后依然成立）
+        double expected = cfg.getWCategory() * r.category() + cfg.getWLocation() * r.location()
+                + cfg.getWTime() * r.time() + cfg.getWKeyword() * r.keyword();
         assertEquals(Math.round(expected * 10000) / 10000.0, r.score(), 0.0002);
     }
 

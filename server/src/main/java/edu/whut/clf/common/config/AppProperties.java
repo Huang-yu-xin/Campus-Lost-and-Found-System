@@ -57,16 +57,18 @@ public class AppProperties {
     public static class Match {
         private double wCategory = 0.40;
         private double wLocation = 0.25;
-        private double wTime = 0.20;
-        private double wKeyword = 0.15;
-        /** 时间评分窗口（天）：间隔越大分越低。 */
-        private int timeWindowDays = 30;
+        // 以下三项由调参 sweep（时间切分网格，docs/testing/match-eval/report-sweep.md）更新：
+        // 测试集 Hit@1 71.3%→76.3%；minScore 由 τ 档位表选 0.70（保留率 100%，难负误报 100%→30%）
+        private double wTime = 0.30;
+        private double wKeyword = 0.05;
+        /** 时间评分窗口（天）：间隔越大分越低。实测间隔分布收窄后由 30 调至 14。 */
+        private int timeWindowDays = 14;
         /** 允许的拾取早于丢失的误差容忍（小时）。 */
         private int timeToleranceHours = 24;
         /** 候选最多返回条数。 */
         private int maxCandidates = 20;
         /** 入选最低分阈值。 */
-        private double minScore = 0.10;
+        private double minScore = 0.70;
         /** event_time 为空的候选帖：按发布时间回看多少天内仍可入选（第三臂兜底）。 */
         private int nullEventWindowDays = 60;
         /** 每个候选臂的安全上限（仅作保险阀，非排序依据；命中即打点告警）。 */
