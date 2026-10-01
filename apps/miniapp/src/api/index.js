@@ -40,7 +40,10 @@ export const claimApi = {
   messages: (claimId) => http.get('/claims/' + claimId + '/messages'),
   sendMessage: (claimId, body) => http.post('/claims/' + claimId + '/messages', { body }),
   raiseDispute: (claimId, data) => http.post('/claims/' + claimId + '/disputes', data),
-  disputes: (claimId) => http.get('/claims/' + claimId + '/disputes')
+  disputes: (claimId) => http.get('/claims/' + claimId + '/disputes'),
+  // V4 闭环：认领完成后关联失主自己的寻物帖
+  resolvedCandidates: (claimId) => http.get('/claims/' + claimId + '/resolved-candidates'),
+  resolveLost: (claimId, lostPostId) => http.post('/claims/' + claimId + '/resolve-lost', { lostPostId })
 }
 
 export const leadApi = {

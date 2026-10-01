@@ -66,6 +66,40 @@
       </view>
     </view>
 
+    <!-- V4 闭环：认领完成后，申请人关联自己的寻物帖 -->
+    <view v-if="claim.status === 'COMPLETED' && claim.applicant" class="card">
+      <view class="mtitle">关联我的寻物帖</view>
+      <view v-if="resolvedDone" class="resolved">已关联寻物帖 ✓ 你的寻物信息已标记为「已找回」。</view>
+      <block v-else>
+        <view class="meta">把这次认领关联到你发布的寻物帖，系统会自动把它标记为「已找回」。</view>
+        <!-- 推荐候选 -->
+        <view v-if="candidates.length" class="cand-list">
+          <view class="cand" v-for="c in candidates" :key="c.id">
+            <view class="cand-main">
+              <view class="cand-title">{{ c.title }}</view>
+              <view class="meta">{{ c.campus || '—' }} · {{ fmt(c.eventTime) || '时间未填' }} · 文本重合 {{ c.overlap }}</view>
+            </view>
+            <button class="btn primary small" :loading="resolving" @click="doResolve(c.id)">关联并结束寻物</button>
+          </view>
+        </view>
+        <!-- 无候选 → 手动选择 -->
+        <view v-else class="cand-empty">
+          <view class="meta">没有自动匹配到的寻物帖。</view>
+          <button class="btn small" @click="toggleManual">手动选择我的寻物帖</button>
+          <view v-if="showManual" class="cand-list">
+            <view v-if="!manualPosts.length" class="meta">你当前没有进行中的寻物帖。</view>
+            <view class="cand" v-for="p in manualPosts" :key="p.id">
+              <view class="cand-main">
+                <view class="cand-title">{{ p.title }}</view>
+                <view class="meta">{{ p.campus || '—' }} · {{ fmt(p.eventTime) || '时间未填' }}</view>
+              </view>
+              <button class="btn primary small" :loading="resolving" @click="doResolve(p.id)">关联</button>
+            </view>
+          </view>
+        </view>
+      </block>
+    </view>
+
     <!-- 留言 -->
     <view class="card">
       <view class="mtitle">留言</view>
@@ -82,14 +116,16 @@
 </template>
 
 <script>
-import { claimApi, loadPrivateImage, uploadFile } from '../../api/index'
+import { claimApi, userApi, loadPrivateImage, uploadFile } from '../../api/index'
 import { claimStatusLabel } from '../../utils/labels'
 
 export default {
   data() {
     return {
       claimId: null, claim: null, messages: [], disputes: [], eviImgs: [], msgText: '',
-      showDisputeForm: false, disputeReason: '', disputeImgs: [], submittingDispute: false
+      showDisputeForm: false, disputeReason: '', disputeImgs: [], submittingDispute: false,
+      // V4 闭环：关联寻物帖
+      candidates: [], resolvedDone: false, showManual: false, manualPosts: [], resolving: false
     }
   },
   computed: {
@@ -106,6 +142,37 @@ export default {
       this.loadMessages()
       this.loadDisputes()
       this.loadEvidence()
+      this.loadCandidates()
+    },
+    async loadCandidates() {
+      if (!this.claim || this.claim.status !== 'COMPLETED' || !this.claim.applicant) return
+      if (this.resolvedDone) return
+      try {
+        const r = await claimApi.resolvedCandidates(this.claimId)
+        this.candidates = (r && r.items) || []
+      } catch (e) { this.candidates = [] }
+    },
+    toggleManual() {
+      this.showManual = !this.showManual
+      if (this.showManual && !this.manualPosts.length) this.loadManualPosts()
+    },
+    async loadManualPosts() {
+      try {
+        const r = await userApi.myPosts(1)
+        const items = (r && r.items) || []
+        this.manualPosts = items.filter((p) => p.type === 'LOST' && p.status === 'ACTIVE')
+      } catch (e) { this.manualPosts = [] }
+    },
+    async doResolve(lostPostId) {
+      this.resolving = true
+      try {
+        await claimApi.resolveLost(this.claimId, lostPostId)
+        uni.showToast({ title: '已关联，寻物帖已标记为已找回', icon: 'none' })
+        this.resolvedDone = true
+        this.candidates = []
+        this.showManual = false
+        await this.load()
+      } catch (e) { /* toasted by request.js */ } finally { this.resolving = false }
     },
     async load() { this.claim = await claimApi.detail(this.claimId) },
     async loadMessages() { try { this.messages = await claimApi.messages(this.claimId) } catch (e) { /* */ } },
@@ -211,4 +278,10 @@ export default {
 .imgbox { position: relative; width: 150rpx; height: 150rpx; margin: 6rpx; }
 .del { position: absolute; top: -10rpx; right: -10rpx; background: #f56c6c; color: #fff; width: 34rpx; height: 34rpx; border-radius: 50%; text-align: center; line-height: 34rpx; }
 .imgadd { width: 150rpx; height: 150rpx; margin: 6rpx; border: 1rpx dashed #c0c4cc; border-radius: 8rpx; text-align: center; line-height: 150rpx; font-size: 50rpx; color: #c0c4cc; }
+.resolved { color: #2e7d32; font-size: 26rpx; }
+.cand-list { margin-top: 12rpx; }
+.cand { display: flex; align-items: center; justify-content: space-between; border-top: 1rpx solid #f0f0f0; padding: 14rpx 0; }
+.cand-main { flex: 1; margin-right: 12rpx; }
+.cand-title { font-size: 26rpx; font-weight: 600; }
+.cand-empty { margin-top: 12rpx; }
 </style>
