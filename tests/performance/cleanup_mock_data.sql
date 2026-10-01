@@ -4,6 +4,9 @@ SET NAMES utf8mb4;
 SET @pb = (SELECT MAX(id) FROM posts) - 10000;
 SET @ub = (SELECT MAX(id) FROM users) - 80;
 
+-- V4：先解除 posts → claims 的闭环外键（resolved_by_claim_id），否则删除 claims 会被 fk_post_resolution 阻断。
+UPDATE posts SET resolved_by_claim_id = NULL WHERE id > @pb AND resolved_by_claim_id IS NOT NULL;
+
 DELETE FROM moderation_actions   WHERE target_type='POST' AND target_id > @pb;
 DELETE FROM disputes             WHERE claim_id IN (SELECT id FROM claims WHERE post_id > @pb);
 DELETE FROM claim_messages       WHERE claim_id IN (SELECT id FROM claims WHERE post_id > @pb);

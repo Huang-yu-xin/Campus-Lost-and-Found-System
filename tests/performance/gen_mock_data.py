@@ -68,6 +68,15 @@ ITEMS = {
 }
 COLORS = ["黑色", "白色", "蓝色", "粉色", "银色", "灰色", "绿色", "米色"]
 
+# 类别 → category_code（镜像 V3__post_category_code.sql / CategoryDictionary）。
+# 直接写入，使 P4 同类目臂与 V4 事实链接回填（按 category_code 匹配）在模拟数据上生效。
+CATEGORY_CODE = {
+    "雨伞": "umbrella", "校园卡": "campus-card", "钥匙": "keys", "耳机": "earphones",
+    "水杯": "cup", "手机": "phone", "钱包": "wallet", "充电宝": "powerbank",
+    "书本教材": "books", "证件": "id-docs", "手表饰品": "watch-accessory", "衣物": "clothing",
+    "笔记本电脑": "laptop", "眼镜": "glasses", "其他": "other",
+}
+
 NICK_FIRST = ["南湖", "马房山", "余家头", "鉴湖", "博学", "东院", "西院", "北苑", "南苑", "余区",
               "图书馆", "操场", "食堂", "水运", "航海", "材料", "汽院", "资环", "机电", "信息"]
 NICK_SECOND = ["小张", "小王", "小李", "同学", "er", "打工人", "摸鱼侠", "路过的", "常驻居民",
@@ -159,7 +168,8 @@ def gen_post():
                  ("HANDOVER" if r < 0.95 else ("WITHDRAWN" if r < 0.985 else "REMOVED"))))
     if age_days <= 7 and status in ("HANDOVER", "COMPLETED") and random.random() < 0.7:
         status = "ACTIVE"
-    return dict(type=ptype, title=title, category=cat, description=desc, campus=campus,
+    return dict(type=ptype, title=title, category=cat, category_code=CATEGORY_CODE[cat],
+                description=desc, campus=campus,
                 location=loc, event_time=event_time, published_at=published_at,
                 status=status, age_days=age_days)
 
@@ -201,14 +211,14 @@ lines.append(f"-- 2) 插入 {N_POSTS} 条发布（publisher_id = @users_base + �
 def flush_post_batch(batch):
     if not batch:
         return
-    lines.append("INSERT INTO posts (publisher_id, type, title, category, public_description, campus, event_location, event_time, published_at, status, version) VALUES")
+    lines.append("INSERT INTO posts (publisher_id, type, title, category, category_code, public_description, campus, event_location, event_time, published_at, status, version) VALUES")
     lines.append(",\n".join(batch) + ";")
 
 batch = []
 for n, p in enumerate(posts):
     k = (n % N_USERS) + 1
     batch.append(
-        f"(@users_base + {k}, '{p['type']}', {q(p['title'])}, {q(p['category'])}, {q(p['description'])}, "
+        f"(@users_base + {k}, '{p['type']}', {q(p['title'])}, {q(p['category'])}, {q(p['category_code'])}, {q(p['description'])}, "
         f"{q(p['campus'])}, {q(p['location'])}, '{fmt(p['event_time'])}', '{fmt(p['published_at'])}', '{p['status']}', 0)"
     )
     if len(batch) == 500:
@@ -302,6 +312,35 @@ FROM claims c JOIN posts p ON p.id = c.post_id
 WHERE c.status='WAITING_HANDOVER' AND c.post_id > @posts_base
 ORDER BY c.id DESC LIMIT 1;""")
 
+# 4.6 事实链接回填（V4）
+lines.append("")
+lines.append("-- 4.6 事实链接回填（V4）：约 40% 的 COMPLETED 认领，选认领人名下【同类目且事件时间最接近】的")
+lines.append("--     ACTIVE LOST 帖，闭环为 COMPLETED 并写 resolved_by_claim_id + closed_at(=认领完成时间)。")
+lines.append("--     用临时表落地候选，避免 MySQL 更新目标表被子查询引用（err 1093）；")
+lines.append("--     双层 ROW_NUMBER 保证每个 claim 取一条、每个 LOST 帖只被一个 claim 关联。")
+lines.append("""DROP TEMPORARY TABLE IF EXISTS tmp_resolved_link;
+CREATE TEMPORARY TABLE tmp_resolved_link AS
+SELECT claim_id, lost_id, completed_at FROM (
+  SELECT claim_id, lost_id, completed_at,
+         ROW_NUMBER() OVER (PARTITION BY lost_id ORDER BY claim_id) AS lr
+  FROM (
+    SELECT c.id AS claim_id, c.completed_at AS completed_at, l.id AS lost_id,
+           ROW_NUMBER() OVER (PARTITION BY c.id ORDER BY
+             ABS(TIMESTAMPDIFF(HOUR, l.event_time, f.event_time))) AS rn
+    FROM claims c
+    JOIN posts f ON f.id = c.post_id
+    JOIN posts l ON l.publisher_id = c.applicant_id AND l.type='LOST' AND l.status='ACTIVE'
+                AND l.category_code IS NOT NULL AND l.category_code = f.category_code
+                AND f.event_time BETWEEN l.event_time - INTERVAL 24 HOUR
+                                     AND l.event_time + INTERVAL 30 DAY
+    WHERE c.status='COMPLETED' AND c.post_id > @posts_base AND RAND(c.id * 97) < 0.40
+  ) per_claim WHERE rn = 1
+) per_lost WHERE lr = 1;
+UPDATE posts l JOIN tmp_resolved_link t ON l.id = t.lost_id
+SET l.status='COMPLETED', l.closed_at = t.completed_at, l.resolved_by_claim_id = t.claim_id
+WHERE l.status='ACTIVE';
+DROP TEMPORARY TABLE IF EXISTS tmp_resolved_link;""")
+
 # 5) 留言
 lines.append("")
 lines.append("-- 5) 申请内留言：WAITING_HANDOVER/COMPLETED 的双方各 1 条（对话起始）")
@@ -354,6 +393,7 @@ lines.append("-- ===== 导入后核对 =====")
 lines.append("SELECT 'users' t, COUNT(*) c FROM users WHERE id > @users_base")
 lines.append("UNION ALL SELECT 'posts', COUNT(*) FROM posts WHERE id > @posts_base")
 lines.append("UNION ALL SELECT 'posts_ACTIVE', COUNT(*) FROM posts WHERE id > @posts_base AND status='ACTIVE'")
+lines.append("UNION ALL SELECT 'resolved pairs', COUNT(*) FROM posts WHERE id > @posts_base AND resolved_by_claim_id IS NOT NULL")
 lines.append("UNION ALL SELECT 'claims', COUNT(*) FROM claims WHERE post_id > @posts_base")
 lines.append("UNION ALL SELECT 'handover_confirmations', COUNT(*) FROM handover_confirmations WHERE claim_id IN (SELECT id FROM claims WHERE post_id > @posts_base)")
 lines.append("UNION ALL SELECT 'claim_messages', COUNT(*) FROM claim_messages WHERE claim_id IN (SELECT id FROM claims WHERE post_id > @posts_base)")
