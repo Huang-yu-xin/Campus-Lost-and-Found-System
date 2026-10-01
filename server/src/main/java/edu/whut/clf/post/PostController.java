@@ -67,7 +67,7 @@ public class PostController {
 
     @PatchMapping("/{postId}")
     @Operation(summary = "本人编辑 FR-POST-04")
-    public ApiResponse<PostDetail> update(@PathVariable Long postId, @RequestBody UpdatePostRequest req) {
+    public ApiResponse<PostDetail> update(@PathVariable Long postId, @Valid @RequestBody UpdatePostRequest req) {
         return ApiResponse.ok(postService.update(postId, AuthContext.currentUserId(), req));
     }
 

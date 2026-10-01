@@ -1,6 +1,7 @@
 package edu.whut.clf.dispute.dto;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -8,11 +9,13 @@ import java.util.List;
 public class DisputeDtos {
 
     public record RaiseDisputeRequest(
-            @NotBlank String reason, String description, List<Long> evidenceFileIds) {}
+            @NotBlank @Size(max = 255) String reason,
+            @Size(max = 2000) String description,
+            List<Long> evidenceFileIds) {}
 
     public record ResolveRequest(
             @NotBlank String resolutionType,   // CONTINUE / TERMINATE_REOPEN / CLOSE
-            @NotBlank String resolutionNote) {}
+            @NotBlank @Size(max = 500) String resolutionNote) {}
 
     /** 当事人可见视图（不含他人证据的越权访问）。 */
     public record DisputeView(

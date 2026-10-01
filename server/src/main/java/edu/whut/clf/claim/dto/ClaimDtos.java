@@ -1,6 +1,7 @@
 package edu.whut.clf.claim.dto;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -8,12 +9,12 @@ import java.util.List;
 public class ClaimDtos {
 
     public record SubmitClaimRequest(
-            @NotBlank String description,      // 私密证明文字（必填，D-04）
+            @NotBlank @Size(max = 2000) String description,      // 私密证明文字（必填，D-04）
             List<Long> evidenceFileIds) {}     // 私密证明图片（可选）
 
     public record ReviewRequest(
             @NotBlank String decision,         // ACCEPT / REJECT
-            String reason) {}
+            @Size(max = 255) String reason) {}
 
     public record ClaimSummary(
             Long id, Long postId, Long applicantId, String status,

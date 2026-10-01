@@ -18,4 +18,7 @@ public interface FileMapper {
 
     @Update("UPDATE files SET bound = 1 WHERE id = #{id}")
     int markBound(Long id);
+
+    @Update("UPDATE files SET bound = 0 WHERE id = #{id}")
+    int markUnbound(Long id);
 }

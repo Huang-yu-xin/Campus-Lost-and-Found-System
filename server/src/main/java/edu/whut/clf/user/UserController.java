@@ -5,6 +5,7 @@ import edu.whut.clf.common.web.ApiResponse;
 import edu.whut.clf.user.dto.UserDtos.*;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
 
 /** M1 用户资料（FR-USER-01/02）。 */
@@ -27,7 +28,7 @@ public class UserController {
 
     @PatchMapping
     @Operation(summary = "修改本人资料 FR-USER-01")
-    public ApiResponse<UserProfileResponse> update(@RequestBody UpdateProfileRequest req) {
+    public ApiResponse<UserProfileResponse> update(@Valid @RequestBody UpdateProfileRequest req) {
         return ApiResponse.ok(userService.updateProfile(AuthContext.currentUserId(), req));
     }
 }

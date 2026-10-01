@@ -120,7 +120,7 @@ public interface PostMapper {
     @Update("""
             UPDATE posts
                SET status = 'COMPLETED', resolved_by_claim_id = #{claimId}, closed_at = NOW(), version = version + 1
-             WHERE id = #{id} AND status = 'ACTIVE'
+             WHERE id = #{id} AND status = 'ACTIVE' AND type = 'LOST'
             """)
     int resolveLost(@Param("id") Long id, @Param("claimId") Long claimId);
 

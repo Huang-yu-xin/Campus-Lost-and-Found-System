@@ -57,12 +57,8 @@ public class DisputeService {
         if (disputeMapper.countOpenByClaim(claimId) > 0) {
             throw BusinessException.of(ErrorCode.DISPUTE_OPEN_EXISTS);
         }
-        List<Long> files = req.evidenceFileIds();
-        if (files != null) {
-            for (Long fid : files) {
-                fileService.requireOwnedFile(fid, userId, FilePurpose.PRIVATE_DISPUTE);
-            }
-        }
+        // A3：去重 + 数量上限 + 拒绝二次绑定
+        List<Long> files = fileService.prepareReplaceBinding(req.evidenceFileIds(), userId, FilePurpose.PRIVATE_DISPUTE);
         Dispute d = new Dispute();
         d.setClaimId(claimId);
         d.setRaisedBy(userId);
@@ -73,11 +69,11 @@ public class DisputeService {
         } catch (DuplicateKeyException e) {
             throw BusinessException.of(ErrorCode.DISPUTE_OPEN_EXISTS);
         }
-        if (files != null) {
-            for (Long fid : files) {
-                evidenceMapper.insert(d.getId(), fid, userId);
-                fileService.markBound(fid);
-            }
+        // 替换语义：首次绑定 deleteByDispute 命中 0 行
+        evidenceMapper.deleteByDispute(d.getId());
+        for (Long fid : files) {
+            evidenceMapper.insert(d.getId(), fid, userId);
+            fileService.markBound(fid);
         }
         auditService.record(userId, Principal.ROLE_USER, "DISPUTE_RAISE", "DISPUTE", d.getId(), "SUCCESS", null);
         // 回填 DB 默认值，使返回视图完整（insert 仅回填自增 id）

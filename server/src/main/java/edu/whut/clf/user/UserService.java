@@ -1,8 +1,10 @@
 package edu.whut.clf.user;
 
+import edu.whut.clf.common.enums.FilePurpose;
 import edu.whut.clf.common.enums.UserStatus;
 import edu.whut.clf.common.error.BusinessException;
 import edu.whut.clf.common.error.ErrorCode;
+import edu.whut.clf.file.FileService;
 import edu.whut.clf.user.dto.UserDtos.*;
 import edu.whut.clf.user.model.User;
 import org.springframework.stereotype.Service;
@@ -11,9 +13,11 @@ import org.springframework.stereotype.Service;
 public class UserService {
 
     private final UserMapper userMapper;
+    private final FileService fileService;
 
-    public UserService(UserMapper userMapper) {
+    public UserService(UserMapper userMapper, FileService fileService) {
         this.userMapper = userMapper;
+        this.fileService = fileService;
     }
 
     public UserProfileResponse getProfile(Long userId) {
@@ -30,7 +34,12 @@ public class UserService {
             u.setCampus(req.campus());
         }
         if (req.avatarFileId() != null) {
+            // A6(P1-B5)：头像必须是本人上传的文件（复用 PUBLIC_POST 用途，不新增枚举），
+            // 否则 INVALID_EVIDENCE_FILE；杜绝设置他人/不存在文件为头像。
+            // 校验后 markBound，使其不被 D13 孤儿清理误删（仅更换头像时旧文件成为可接受的留存）。
+            fileService.requireOwnedFile(req.avatarFileId(), userId, FilePurpose.PUBLIC_POST);
             u.setAvatarFileId(req.avatarFileId());
+            fileService.markBound(req.avatarFileId());
         }
         userMapper.updateProfile(u);
         return toResponse(u);

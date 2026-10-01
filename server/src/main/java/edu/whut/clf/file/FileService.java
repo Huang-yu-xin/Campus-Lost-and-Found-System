@@ -14,6 +14,8 @@ import java.io.IOException;
 import java.nio.file.*;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -139,17 +141,47 @@ public class FileService {
         return false;
     }
 
-    /** 校验文件属于指定用户且用途匹配（绑定业务对象前调用）。 */
+    /**
+     * 校验文件属于指定用户且用途匹配（绑定业务对象前调用）。
+     * A3(P1-B2)：已 bound=1 的文件拒绝二次绑定（默认对所有用途一律拒绝，保持简单），
+     * 防止同一上传被绑定到多个业务对象。替换语义的更新流程须先 {@link #markUnbound} 释放旧文件。
+     */
     public StoredFile requireOwnedFile(Long fileId, Long ownerId, FilePurpose expectedPurpose) {
         StoredFile f = fileMapper.findById(fileId);
-        if (f == null || !f.getOwnerId().equals(ownerId) || !f.getPurpose().equals(expectedPurpose.name())) {
+        if (f == null || !f.getOwnerId().equals(ownerId) || !f.getPurpose().equals(expectedPurpose.name())
+                || Boolean.TRUE.equals(f.getBound())) {
             throw BusinessException.of(ErrorCode.INVALID_EVIDENCE_FILE);
         }
         return f;
     }
 
+    /**
+     * 替换式绑定的入参规整（post/claim/lead/dispute 四处同构逻辑共用）：
+     * LinkedHashSet 去重保序 → 数量上限（统一用 maxCountPerPost）→ 逐个归属/用途校验（含拒绝二次绑定）。
+     * 返回去重后的有序 fileId 列表；入参 null 返回空列表。超限抛 INVALID_ARGUMENT(400)。
+     */
+    public List<Long> prepareReplaceBinding(List<Long> fileIds, Long ownerId, FilePurpose purpose) {
+        if (fileIds == null) {
+            return List.of();
+        }
+        List<Long> unique = new ArrayList<>(new LinkedHashSet<>(fileIds));
+        int max = props.getFile().getMaxCountPerPost();
+        if (unique.size() > max) {
+            throw new BusinessException(ErrorCode.INVALID_ARGUMENT, "文件数量超过上限 " + max);
+        }
+        for (Long fid : unique) {
+            requireOwnedFile(fid, ownerId, purpose);
+        }
+        return unique;
+    }
+
     public void markBound(Long fileId) {
         fileMapper.markBound(fileId);
+    }
+
+    /** 释放绑定（替换语义更新时先释放旧文件，使其可被重新绑定或被孤儿清理回收）。 */
+    public void markUnbound(Long fileId) {
+        fileMapper.markUnbound(fileId);
     }
 
     /** 依 magic bytes 识别图片真实类型；非图片返回 null。 */

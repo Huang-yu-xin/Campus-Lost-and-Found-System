@@ -244,9 +244,16 @@ public class PostService {
         if (imageFileIds == null) {
             return;
         }
+        // A3(P1-B2) 替换语义：先释放并删除本帖旧图，再按去重后的新集重建，杜绝重复行。
+        // 事务内执行：若后续校验失败（超限/他人文件）整体回滚，旧图不丢失。
+        List<Long> old = imageMapper.findByPost(postId).stream().map(PostImage::getFileId).toList();
+        imageMapper.deleteByPost(postId);
+        for (Long fid : old) {
+            fileService.markUnbound(fid);
+        }
+        List<Long> unique = fileService.prepareReplaceBinding(imageFileIds, userId, FilePurpose.PUBLIC_POST);
         int order = 0;
-        for (Long fileId : imageFileIds) {
-            fileService.requireOwnedFile(fileId, userId, FilePurpose.PUBLIC_POST);
+        for (Long fileId : unique) {
             PostImage img = new PostImage();
             img.setPostId(postId);
             img.setFileId(fileId);

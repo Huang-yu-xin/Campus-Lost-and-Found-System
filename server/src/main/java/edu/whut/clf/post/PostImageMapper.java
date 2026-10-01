@@ -12,6 +12,10 @@ public interface PostImageMapper {
     @Insert("INSERT INTO post_images (post_id, file_id, sort_order) VALUES (#{postId}, #{fileId}, #{sortOrder})")
     int insert(PostImage image);
 
+    /** 替换语义绑定前清除本帖旧图（P1-B2）。 */
+    @Delete("DELETE FROM post_images WHERE post_id = #{postId}")
+    int deleteByPost(Long postId);
+
     @Select("SELECT * FROM post_images WHERE post_id = #{postId} ORDER BY sort_order")
     List<PostImage> findByPost(Long postId);
 

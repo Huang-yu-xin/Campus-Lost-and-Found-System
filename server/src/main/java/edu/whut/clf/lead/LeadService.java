@@ -51,23 +51,19 @@ public class LeadService {
         if (Objects.equals(post.getPublisherId(), userId)) {
             throw new BusinessException(ErrorCode.INVALID_ARGUMENT, "不能给自己的寻物信息提交线索");
         }
-        List<Long> files = req.evidenceFileIds();
-        if (files != null) {
-            for (Long fid : files) {
-                fileService.requireOwnedFile(fid, userId, FilePurpose.PRIVATE_LEAD);
-            }
-        }
+        // A3：去重 + 数量上限 + 拒绝二次绑定
+        List<Long> files = fileService.prepareReplaceBinding(req.evidenceFileIds(), userId, FilePurpose.PRIVATE_LEAD);
         LostLead lead = new LostLead();
         lead.setLostPostId(postId);
         lead.setReporterId(userId);
         lead.setBody(req.body().trim());
         lead.setStatus(LeadStatus.SUBMITTED.name());
         leadMapper.insert(lead);
-        if (files != null) {
-            for (Long fid : files) {
-                evidenceMapper.insert(lead.getId(), fid);
-                fileService.markBound(fid);
-            }
+        // 替换语义：首次绑定 deleteByLead 命中 0 行
+        evidenceMapper.deleteByLead(lead.getId());
+        for (Long fid : files) {
+            evidenceMapper.insert(lead.getId(), fid);
+            fileService.markBound(fid);
         }
         return toItem(lead, true);
     }

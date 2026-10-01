@@ -77,13 +77,8 @@ public class ClaimService {
         if (claimMapper.countActiveByPostAndApplicant(postId, userId) > 0) {
             throw BusinessException.of(ErrorCode.ACTIVE_CLAIM_EXISTS);
         }
-        // 校验证据文件归属与用途
-        List<Long> files = req.evidenceFileIds();
-        if (files != null) {
-            for (Long fid : files) {
-                fileService.requireOwnedFile(fid, userId, FilePurpose.PRIVATE_CLAIM);
-            }
-        }
+        // 校验证据文件归属与用途（A3：去重 + 数量上限 + 拒绝二次绑定）
+        List<Long> files = fileService.prepareReplaceBinding(req.evidenceFileIds(), userId, FilePurpose.PRIVATE_CLAIM);
         Claim claim = new Claim();
         claim.setPostId(postId);
         claim.setApplicantId(userId);
@@ -95,11 +90,11 @@ public class ClaimService {
             // 唯一索引 uk_claim_active_applicant 兜底
             throw BusinessException.of(ErrorCode.ACTIVE_CLAIM_EXISTS);
         }
-        if (files != null) {
-            for (Long fid : files) {
-                evidenceMapper.insert(claim.getId(), fid);
-                fileService.markBound(fid);
-            }
+        // 替换语义：首次绑定 deleteByClaim 命中 0 行
+        evidenceMapper.deleteByClaim(claim.getId());
+        for (Long fid : files) {
+            evidenceMapper.insert(claim.getId(), fid);
+            fileService.markBound(fid);
         }
         return detail(claim.getId(), userId);
     }
@@ -265,6 +260,10 @@ public class ClaimService {
         if (!ClaimStatus.WAITING_HANDOVER.name().equals(claim.getStatus())) {
             throw BusinessException.of(ErrorCode.CLAIM_STATE_INVALID);
         }
+        // A4(P1-B3)：与 confirmHandover 同口径——存在 OPEN 争议时冻结取消，避免绕过争议裁决
+        if (hasOpenDispute(claimId)) {
+            throw BusinessException.of(ErrorCode.HANDOVER_PAUSED_BY_DISPUTE);
+        }
         int n = claimMapper.changeStatus(claimId, ClaimStatus.WAITING_HANDOVER.name(), ClaimStatus.CLOSED.name());
         if (n == 0) {
             throw BusinessException.of(ErrorCode.CLAIM_STATE_INVALID);
@@ -312,6 +311,9 @@ public class ClaimService {
         }
         Post found = postService.getById(claim.getPostId());
         Post lost = postService.getById(lostPostId);
+        if (!PostType.LOST.name().equals(lost.getType())) {           // A5(P1-B4)：只能关联寻物帖
+            throw new BusinessException(ErrorCode.INVALID_ARGUMENT, "只能关联寻物帖");
+        }
         if (!Objects.equals(lost.getPublisherId(), userId)) {         // 3. 帖子归属
             throw BusinessException.of(ErrorCode.RESOLVE_NOT_OWNER);
         }
