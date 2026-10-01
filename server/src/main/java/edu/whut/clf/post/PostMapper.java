@@ -34,12 +34,27 @@ public interface PostMapper {
             """)
     int updateEditable(Post post);
 
+    // V4 闭环：closed_at 的单一权威维护规则——进入终态（COMPLETED/WITHDRAWN/REMOVED）
+    // 写 NOW()，回到 ACTIVE（restore / 争议 TERMINATE_REOPEN）清 NULL。规则内嵌在下面两条
+    // 状态转换 SQL 的 CASE 中，覆盖全部调用点（withdraw / mark-found / 交接完成 / 取消交接 /
+    // 争议裁决 / 治理下架·恢复），因此无需改动任何 Java 调用方逻辑。
+
     /** 条件更新状态（乐观并发）：仅当当前状态匹配时才转换。返回受影响行数。 */
-    @Update("UPDATE posts SET status = #{to}, version = version + 1 WHERE id = #{id} AND status = #{from}")
+    @Update("""
+            UPDATE posts
+               SET status = #{to}, version = version + 1,
+                   closed_at = CASE WHEN #{to} IN ('COMPLETED','WITHDRAWN','REMOVED') THEN NOW() ELSE NULL END
+             WHERE id = #{id} AND status = #{from}
+            """)
     int changeStatus(@Param("id") Long id, @Param("from") String from, @Param("to") String to);
 
     /** 管理员治理用：无条件设置状态（下架/恢复），前后状态由治理记录留存。 */
-    @Update("UPDATE posts SET status = #{to}, version = version + 1 WHERE id = #{id}")
+    @Update("""
+            UPDATE posts
+               SET status = #{to}, version = version + 1,
+                   closed_at = CASE WHEN #{to} IN ('COMPLETED','WITHDRAWN','REMOVED') THEN NOW() ELSE NULL END
+             WHERE id = #{id}
+            """)
     int forceStatus(@Param("id") Long id, @Param("to") String to);
 
     // ---- 公开列表 / 搜索（M3 FR-POST-03 / M4 FR-SEARCH-01）----
