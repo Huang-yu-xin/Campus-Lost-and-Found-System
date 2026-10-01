@@ -10,9 +10,9 @@ import java.util.List;
 public interface PostMapper {
 
     @Insert("""
-            INSERT INTO posts (publisher_id, type, title, category, public_description, campus,
+            INSERT INTO posts (publisher_id, type, title, category, category_code, public_description, campus,
                                event_location, event_time, published_at, status, version)
-            VALUES (#{publisherId}, #{type}, #{title}, #{category}, #{publicDescription}, #{campus},
+            VALUES (#{publisherId}, #{type}, #{title}, #{category}, #{categoryCode}, #{publicDescription}, #{campus},
                     #{eventLocation}, #{eventTime}, #{publishedAt}, #{status}, 0)
             """)
     @Options(useGeneratedKeys = true, keyProperty = "id")
@@ -26,8 +26,9 @@ public interface PostMapper {
     Post lockById(Long id);
 
     @Update("""
-            UPDATE posts SET title = #{title}, category = #{category}, public_description = #{publicDescription},
-                   campus = #{campus}, event_location = #{eventLocation}, event_time = #{eventTime},
+            UPDATE posts SET title = #{title}, category = #{category}, category_code = #{categoryCode},
+                   public_description = #{publicDescription}, campus = #{campus},
+                   event_location = #{eventLocation}, event_time = #{eventTime},
                    version = version + 1
             WHERE id = #{id}
             """)
@@ -94,14 +95,23 @@ public interface PostMapper {
 
     // ---- 匹配候选（相反类型、ACTIVE）(FR-MATCH-01) ----
     // P1：时间窗多臂候选。窗口与 T 子分的有效域一致（窗外候选 T=0，本就无价值）；
-    // 第二臂兜底 event_time 为空的候选（按发布时间回看 nullEventWindowDays 天）。
-    // 每臂 LIMIT 仅作保险阀；两臂按 event_time 是否为空天然不相交，仍由 Java 侧按 id 去重兜底。
+    // P4：同类目臂（category_code 相同、窗口更宽），覆盖"晚找回"场景；
+    // 兜底臂覆盖 event_time 为空的候选（按发布时间回看 nullEventWindowDays 天）。
+    // 每臂 LIMIT 仅作保险阀；臂间可能重叠，由 Java 侧按 id 去重兜底。
     @Select("""
             <script>
             (SELECT * FROM posts
               WHERE status = 'ACTIVE' AND type = #{oppositeType} AND id != #{selfId}
                 AND event_time &gt;= #{winStart} AND event_time &lt;= #{winEnd}
               LIMIT #{armLimit})
+            <if test="selfCode != null and selfCode != ''">
+            UNION ALL
+            (SELECT * FROM posts
+              WHERE status = 'ACTIVE' AND type = #{oppositeType} AND id != #{selfId}
+                AND category_code = #{selfCode}
+                AND event_time &gt;= #{catStart} AND event_time &lt;= #{catEnd}
+              LIMIT #{armLimit})
+            </if>
             UNION ALL
             (SELECT * FROM posts
               WHERE status = 'ACTIVE' AND type = #{oppositeType} AND id != #{selfId}
@@ -113,6 +123,9 @@ public interface PostMapper {
                                       @Param("selfId") Long selfId,
                                       @Param("winStart") LocalDateTime winStart,
                                       @Param("winEnd") LocalDateTime winEnd,
+                                      @Param("selfCode") String selfCode,
+                                      @Param("catStart") LocalDateTime catStart,
+                                      @Param("catEnd") LocalDateTime catEnd,
                                       @Param("nullWinStart") LocalDateTime nullWinStart,
                                       @Param("armLimit") int armLimit);
 

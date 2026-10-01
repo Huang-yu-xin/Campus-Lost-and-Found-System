@@ -1,6 +1,7 @@
 package edu.whut.clf.it;
 
 import edu.whut.clf.common.config.AppProperties;
+import edu.whut.clf.match.CategoryDictionary;
 import edu.whut.clf.match.MatchScorer;
 import edu.whut.clf.match.MatchService;
 import edu.whut.clf.post.PostMapper;
@@ -30,11 +31,12 @@ class MatchEvaluationHarnessIT {
     @Autowired UserMapper userMapper;
     @Autowired MatchService matchService;
     @Autowired MatchScorer scorer;
+    @Autowired CategoryDictionary dictionary;
     @Autowired AppProperties props;
 
     @Test
     void evaluateBaselineAndWriteReport() {
-        MatchEvalHarness harness = new MatchEvalHarness(jdbc, postMapper, userMapper, matchService, scorer, props);
+        MatchEvalHarness harness = new MatchEvalHarness(jdbc, postMapper, userMapper, matchService, scorer, dictionary, props);
         long seed = 20260929L;
         MatchEvalHarness.Seed s = harness.seed(seed, 200, 2400, 40);
         assertEquals(200, s.pairs().size());

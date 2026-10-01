@@ -71,5 +71,9 @@ public class AppProperties {
         private int nullEventWindowDays = 60;
         /** 每个候选臂的安全上限（仅作保险阀，非排序依据；命中即打点告警）。 */
         private int candidateArmLimit = 500;
+        /** 同父类别的部分得分（P4 类别两级字典）。 */
+        private double sameParentScore = 0.5;
+        /** 同类目臂的窗口（天）：比时间窗更宽，覆盖晚找回场景。 */
+        private int categoryWindowDays = 90;
     }
 }

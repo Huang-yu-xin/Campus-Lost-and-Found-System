@@ -1,6 +1,7 @@
 package edu.whut.clf.it;
 
 import edu.whut.clf.common.config.AppProperties;
+import edu.whut.clf.match.CategoryDictionary;
 import edu.whut.clf.match.MatchScorer;
 import edu.whut.clf.match.dto.MatchDtos.MatchCandidate;
 import edu.whut.clf.match.MatchService;
@@ -35,15 +36,18 @@ public class MatchEvalHarness {
     private final UserMapper userMapper;
     private final MatchService matchService;
     private final MatchScorer scorer;
+    private final CategoryDictionary dictionary;
     private final AppProperties.Match cfg;
 
     public MatchEvalHarness(JdbcTemplate jdbc, PostMapper postMapper, UserMapper userMapper,
-                            MatchService matchService, MatchScorer scorer, AppProperties props) {
+                            MatchService matchService, MatchScorer scorer,
+                            CategoryDictionary dictionary, AppProperties props) {
         this.jdbc = jdbc;
         this.postMapper = postMapper;
         this.userMapper = userMapper;
         this.matchService = matchService;
         this.scorer = scorer;
+        this.dictionary = dictionary;
         this.cfg = props.getMatch();
     }
 
@@ -159,6 +163,7 @@ public class MatchEvalHarness {
         p.setType(type);
         p.setTitle(title);
         p.setCategory(category);
+        p.setCategoryCode(dictionary.codeFor(category).orElse(null));
         p.setPublicDescription(desc);
         p.setCampus(campus);
         p.setEventLocation(loc);

@@ -8,7 +8,7 @@
         <text :class="['seg', q.type === 'LOST' ? 'on' : '']" @click="q.type = 'LOST'">寻物</text>
         <text :class="['seg', q.type === 'FOUND' ? 'on' : '']" @click="q.type = 'FOUND'">招领</text>
       </view>
-      <view class="rowline"><text class="lb">类别</text><input class="in2" v-model="q.category" placeholder="如 钱包/钥匙" /></view>
+      <view class="rowline"><text class="lb">类别</text><picker class="in2" mode="selector" :range="categoryOptions" @change="onPickCategory"><view class="in2">{{ q.category || '全部类别' }}</view></picker></view>
       <view class="rowline"><text class="lb">校区</text><input class="in2" v-model="q.campus" placeholder="校区" /></view>
       <view class="rowline"><text class="lb">起</text>
         <picker mode="date" :value="fromStr" @change="e => fromStr = e.detail.value"><view class="in2">{{ fromStr || '事件起始日' }}</view></picker>
@@ -38,9 +38,12 @@
 <script>
 import { postApi } from '../../api/index'
 
+// 类别字典规范子类（镜像 server/src/main/resources/matching/category-dictionary.v1.txt 的展示名）
+const CATEGORIES = ['雨伞', '校园卡', '钥匙', '耳机', '水杯', '手机', '钱包', '充电宝', '书本教材', '证件', '手表饰品', '衣物', '笔记本电脑', '眼镜', '其他']
 export default {
   data() {
     return {
+      categoryOptions: CATEGORIES,
       q: { keyword: '', type: '', category: '', campus: '' },
       fromStr: '', toStr: '',
       list: [], page: 1, pageSize: 20, loading: false, noMore: false
@@ -54,6 +57,7 @@ export default {
     if (!this.noMore && !this.loading) this.loadMore()
   },
   methods: {
+    onPickCategory(e) { this.q.category = this.categoryOptions[Number(e.detail.value)] },
     params() {
       const p = { keyword: this.q.keyword, type: this.q.type, category: this.q.category, campus: this.q.campus, page: this.page, pageSize: this.pageSize }
       if (this.fromStr) p.eventFrom = this.fromStr + 'T00:00:00'

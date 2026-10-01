@@ -47,7 +47,7 @@ public class MatchService {
         this.cfg = props.getMatch();
     }
 
-    /** 候选阶段（阈值前）：按事件时间窗选取相反类型 ACTIVE 候选，Java 侧按 id 去重。 */
+    /** 候选阶段（阈值前）：按事件时间窗 + 同类目宽窗 + 空时间兜底臂选取，Java 侧按 id 去重。 */
     public List<Post> candidatesFor(Post self) {
         String opposite = PostType.LOST.name().equals(self.getType())
                 ? PostType.FOUND.name() : PostType.LOST.name();
@@ -63,10 +63,22 @@ public class MatchService {
             winStart = anchor.minusDays(cfg.getTimeWindowDays());
             winEnd = anchor.plusHours(cfg.getTimeToleranceHours());
         }
+        // P4 同类目臂：窗口更宽（覆盖晚找回），锚点回退与时间臂一致
+        LocalDateTime catAnchor = self.getEventTime() != null ? self.getEventTime() : self.getPublishedAt();
+        LocalDateTime catStart;
+        LocalDateTime catEnd;
+        if (PostType.LOST.name().equals(self.getType())) {
+            catStart = catAnchor.minusHours(cfg.getTimeToleranceHours());
+            catEnd = catAnchor.plusDays(cfg.getCategoryWindowDays());
+        } else {
+            catStart = catAnchor.minusDays(cfg.getCategoryWindowDays());
+            catEnd = catAnchor.plusHours(cfg.getTimeToleranceHours());
+        }
         LocalDateTime nullWinStart = LocalDateTime.now().minusDays(cfg.getNullEventWindowDays());
         List<Post> candidates = postMapper.findCandidatesWindowed(opposite, self.getId(),
-                winStart, winEnd, nullWinStart, cfg.getCandidateArmLimit());
-        if (candidates.size() >= 2L * cfg.getCandidateArmLimit()) {
+                winStart, winEnd, self.getCategoryCode(), catStart, catEnd,
+                nullWinStart, cfg.getCandidateArmLimit());
+        if (candidates.size() >= 3L * cfg.getCandidateArmLimit()) {
             log.warn("match candidate arms hit LIMIT (selfId={}, size={}) — 截断可见：考虑加大 armLimit 或收窄窗口",
                     self.getId(), candidates.size());
         }

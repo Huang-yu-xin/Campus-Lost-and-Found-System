@@ -6,7 +6,7 @@
     </view>
 
     <view class="field"><text class="lb">标题</text><input class="in" v-model="form.title" placeholder="简要标题" /></view>
-    <view class="field"><text class="lb">类别</text><input class="in" v-model="form.category" placeholder="如 钱包/钥匙/证件" /></view>
+    <view class="field"><text class="lb">类别</text><picker class="in" mode="selector" :range="categoryOptions" @change="onPickCategory"><view class="in">{{ form.category || '请选择类别' }}</view></picker></view>
     <view class="field"><text class="lb">描述</text><textarea class="ta" v-model="form.publicDescription" placeholder="公开描述（招领请勿公开唯一性证明细节）" /></view>
     <view class="field"><text class="lb">校区</text><input class="in" v-model="form.campus" placeholder="可选" /></view>
     <view class="field"><text class="lb">{{ form.type === 'LOST' ? '丢失地点' : '拾取地点' }}</text><input class="in" v-model="form.eventLocation" placeholder="地点" /></view>
@@ -34,6 +34,8 @@
 <script>
 import { postApi, uploadFile, fileUrl } from '../../api/index'
 
+// 类别字典规范子类（镜像 server/src/main/resources/matching/category-dictionary.v1.txt 的展示名）
+const CATEGORIES = ['雨伞', '校园卡', '钥匙', '耳机', '水杯', '手机', '钱包', '充电宝', '书本教材', '证件', '手表饰品', '衣物', '笔记本电脑', '眼镜', '其他']
 export default {
   data() {
     return {
@@ -41,6 +43,7 @@ export default {
       dateStr: '',
       submitting: false,
       images: [], // { url, fileId?, localPath? }
+      categoryOptions: CATEGORIES,
       form: { type: 'FOUND', title: '', category: '', publicDescription: '', campus: '', eventLocation: '', eventTime: null }
     }
   },
@@ -51,6 +54,7 @@ export default {
     }
   },
   methods: {
+    onPickCategory(e) { this.form.category = this.categoryOptions[Number(e.detail.value)] },
     async loadForEdit(id) {
       const d = await postApi.detail(id)
       if (!d.mine) {

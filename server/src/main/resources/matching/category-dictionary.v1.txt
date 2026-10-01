@@ -1,0 +1,30 @@
+# 类别字典 v1（P4 类别归一化）
+# 用途：把发帖时的自由文本类别归一到规范 category_code（两级：父类/子类），
+#       供匹配 C 子分（同子类 1.0 / 同父类 0.5）与候选"同类目臂"使用。
+# 格式：
+#   子类编码|父类编码|展示名|别名（、分隔，精确匹配 + 最长包含匹配）
+#   exclude|误包含词（命中后禁用包含匹配，仅允许整串精确匹配）
+# 注意：
+#   - 别名按长度降序参与包含匹配（"蓝牙耳机" 先于 "耳机"）；
+#   - 裸单字（如 卡、书）刻意不入别名，避免包含匹配误命中（图书馆/卡套）；
+#   - 修改本文件必须升级版本号（文件名 vN），并同步 V 迁移中的精确回填清单。
+version=v1
+umbrella|umbrella|雨伞|雨伞、长柄伞、晴雨伞、自动伞、折叠伞、伞
+earphones|electronics|耳机|耳机、蓝牙耳机、无线耳机、有线耳机、耳麦
+phone|electronics|手机|手机、电话、智能机、安卓手机
+powerbank|electronics|充电宝|充电宝、移动电源
+laptop|electronics|笔记本电脑|笔记本电脑、笔记本、手提电脑、电脑
+campus-card|cards|校园卡|校园卡、饭卡、学生卡、一卡通、餐卡
+id-docs|cards|证件|证件、身份证、驾驶证、护照、医保卡
+keys|keys|钥匙|钥匙、一串钥匙、宿舍钥匙、电动车钥匙、钥匙串、锁匙
+cup|drinkware|水杯|水杯、保温杯、杯子、茶杯、吸管杯、塑料杯、马克杯
+wallet|bags|钱包|钱包、卡包、皮夹
+books|books|书本教材|书本教材、教材、课本、书本、真题、辅导书
+watch-accessory|accessories|手表饰品|手表饰品、手表、手链、项链、戒指、耳环
+clothing|clothing|衣物|衣物、衣服、卫衣、围巾、帽子、棒球帽、外套、手套
+glasses|glasses|眼镜|眼镜、墨镜、隐形眼镜、太阳镜
+other|other|其他|其他、杂物
+exclude|耳机套
+exclude|耳机盒
+exclude|卡套
+exclude|书包

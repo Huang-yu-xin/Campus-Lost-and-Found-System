@@ -1,6 +1,7 @@
 package edu.whut.clf.post;
 
 import edu.whut.clf.common.enums.FilePurpose;
+import edu.whut.clf.match.CategoryDictionary;
 import edu.whut.clf.common.enums.PostStatus;
 import edu.whut.clf.common.enums.PostType;
 import edu.whut.clf.common.error.BusinessException;
@@ -28,14 +29,17 @@ public class PostService {
     private final FileService fileService;
     private final UserService userService;
     private final ObjectProvider<PostClaimGuard> claimGuard;
+    private final CategoryDictionary categoryDictionary;
 
     public PostService(PostMapper postMapper, PostImageMapper imageMapper, FileService fileService,
-                       UserService userService, ObjectProvider<PostClaimGuard> claimGuard) {
+                       UserService userService, ObjectProvider<PostClaimGuard> claimGuard,
+                       CategoryDictionary categoryDictionary) {
         this.postMapper = postMapper;
         this.imageMapper = imageMapper;
         this.fileService = fileService;
         this.userService = userService;
         this.claimGuard = claimGuard;
+        this.categoryDictionary = categoryDictionary;
     }
 
     @Transactional
@@ -52,6 +56,7 @@ public class PostService {
         p.setType(type.name());
         p.setTitle(req.title().trim());
         p.setCategory(req.category().trim());
+        p.setCategoryCode(categoryDictionary.codeFor(req.category()).orElse(null));
         p.setPublicDescription(req.publicDescription().trim());
         p.setCampus(req.campus());
         p.setEventLocation(req.eventLocation());
@@ -118,7 +123,10 @@ public class PostService {
             throw BusinessException.of(ErrorCode.POST_EDIT_LOCKED);
         }
         if (req.title() != null) post.setTitle(req.title().trim());
-        if (req.category() != null) post.setCategory(req.category().trim());
+        if (req.category() != null) {
+            post.setCategory(req.category().trim());
+            post.setCategoryCode(categoryDictionary.codeFor(req.category()).orElse(null));
+        }
         if (req.publicDescription() != null) post.setPublicDescription(req.publicDescription().trim());
         if (req.campus() != null) post.setCampus(req.campus());
         if (req.eventLocation() != null) post.setEventLocation(req.eventLocation());

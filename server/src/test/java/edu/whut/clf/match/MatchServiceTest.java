@@ -38,7 +38,8 @@ class MatchServiceTest {
         postMapper = mock(PostMapper.class);
         imageMapper = mock(PostImageMapper.class);
         props = new AppProperties();
-        service = new MatchService(postMapper, imageMapper, new MatchScorer(props), props);
+        service = new MatchService(postMapper, imageMapper,
+                new MatchScorer(props.getMatch(), new CategoryDictionary()), props);
     }
 
     private Post post(long id, String type, String category, String campus, String loc,
@@ -71,7 +72,7 @@ class MatchServiceTest {
             candidates.add(post(id, "FOUND", "水杯", "南湖校区", "图书馆",
                     LocalDateTime.now().minusDays(1), "捡到白色保温杯", "捡到白色保温杯在图书馆"));
         }
-        when(postMapper.findCandidatesWindowed(anyString(), any(), any(), any(), any(), anyInt()))
+        when(postMapper.findCandidatesWindowed(anyString(), any(), any(), any(), any(), any(), any(), any(), anyInt()))
                 .thenReturn(candidates);
 
         // 只有 id=100 的候选有图片
@@ -110,7 +111,7 @@ class MatchServiceTest {
         List<Post> candidates = List.of(
                 post(200, "FOUND", "钥匙", "余家头校区", "操场",
                         LocalDateTime.now().plusDays(100), "捡到一串钥匙", "操场捡到钥匙"));
-        when(postMapper.findCandidatesWindowed(anyString(), any(), any(), any(), any(), anyInt()))
+        when(postMapper.findCandidatesWindowed(anyString(), any(), any(), any(), any(), any(), any(), any(), anyInt()))
                 .thenReturn(candidates);
 
         List<MatchCandidate> result = service.matchesFor(1L);
@@ -130,7 +131,7 @@ class MatchServiceTest {
         List<MatchCandidate> result = service.matchesFor(1L);
 
         assertTrue(result.isEmpty());
-        verify(postMapper, never()).findCandidatesWindowed(anyString(), any(), any(), any(), any(), anyInt());
+        verify(postMapper, never()).findCandidatesWindowed(anyString(), any(), any(), any(), any(), any(), any(), any(), anyInt());
         verify(imageMapper, never()).findByPostIds(any());
     }
 }

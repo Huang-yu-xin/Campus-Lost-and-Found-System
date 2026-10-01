@@ -12,6 +12,7 @@ public class Post {
     private String type;               // PostType
     private String title;
     private String category;
+    private String categoryCode;      // 类别字典归一码（P4，可空=未映射）
     private String publicDescription;
     private String campus;
     private String eventLocation;

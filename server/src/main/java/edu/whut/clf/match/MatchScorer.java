@@ -19,15 +19,18 @@ import java.util.*;
 public class MatchScorer {
 
     private final AppProperties.Match cfg;
+    private final CategoryDictionary dictionary;
 
     @Autowired
-    public MatchScorer(AppProperties props) {
+    public MatchScorer(AppProperties props, CategoryDictionary dictionary) {
         this.cfg = props.getMatch();
+        this.dictionary = dictionary;
     }
 
     /** 供测试用的显式构造。 */
-    public MatchScorer(AppProperties.Match cfg) {
+    public MatchScorer(AppProperties.Match cfg, CategoryDictionary dictionary) {
         this.cfg = cfg;
+        this.dictionary = dictionary;
     }
 
     public Result score(Post self, Post candidate) {
@@ -45,6 +48,24 @@ public class MatchScorer {
     }
 
     private double categoryScore(Post a, Post b, List<String> reasons) {
+        // P4：优先用归一码两级评分（同子类 1.0 / 同父类 0.5）；任一侧未映射回退原文精确比对。
+        String ca = a.getCategoryCode();
+        String cb = b.getCategoryCode();
+        if (ca != null && cb != null) {
+            if (ca.equals(cb)) {
+                reasons.add("类别一致：" + dictionary.labelOf(ca));
+                return 1.0;
+            }
+            String pa = dictionary.parentOf(ca);
+            String pb = dictionary.parentOf(cb);
+            if (pa != null && pa.equals(pb)) {
+                reasons.add("同父类：" + dictionary.labelOf(pa)
+                        + "（" + a.getCategory() + " ≈ " + b.getCategory() + "）");
+                return cfg.getSameParentScore();
+            }
+            reasons.add("类别不同（" + a.getCategory() + " ≠ " + b.getCategory() + "）");
+            return 0;
+        }
         if (a.getCategory() == null || b.getCategory() == null) {
             reasons.add("类别缺失，未计入类别分");
             return 0;
@@ -53,7 +74,7 @@ public class MatchScorer {
             reasons.add("类别一致：" + a.getCategory());
             return 1.0;
         }
-        reasons.add("类别不同");
+        reasons.add("类别不同（类别未映射，按原文精确比对）");
         return 0;
     }
 
