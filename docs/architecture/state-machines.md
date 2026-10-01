@@ -12,6 +12,7 @@
 stateDiagram-v2
     [*] --> ACTIVE: 发布
     ACTIVE --> COMPLETED: LOST 失主标记已找回
+    ACTIVE --> COMPLETED: LOST resolve-lost 关联认领(写 resolved_by_claim_id+closed_at)
     ACTIVE --> HANDOVER: FOUND 接受一份待审申请(同事务锁定)
     HANDOVER --> COMPLETED: FOUND 双方确认且无OPEN争议
     HANDOVER --> ACTIVE: 受控取消交接(可继续招领)
@@ -26,6 +27,7 @@ stateDiagram-v2
 | 当前 | 动作 | 下一状态 | 执行人 / 约束 |
 |---|---|---|---|
 | ACTIVE, LOST | 确认已找回 | COMPLETED | 发布者；保留线索 |
+| ACTIVE, LOST | resolve-lost：申请人确认关联认领 | COMPLETED | 申请人（=失主）；事务内 lockById+条件更新，写 resolved_by_claim_id + closed_at（V4 闭环，硬校验=本人+ACTIVE+类别一致） |
 | ACTIVE, FOUND | 接受待审申请 | HANDOVER | 发布者；同事务锁定物品+唯一交接 |
 | HANDOVER, FOUND | 双方确认且无 OPEN 争议 | COMPLETED | 服务端自动归并 |
 | HANDOVER, FOUND | 受控取消交接 | ACTIVE 或依裁决关闭 | 明确业务动作；原申请留终止记录 |

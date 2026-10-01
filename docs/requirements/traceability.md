@@ -29,6 +29,7 @@
 | FR-POST-03 | B | SRS§3-M3 | GET /posts,/posts/{id} | post | TC-SEARCH-01 | 🟢 |
 | FR-POST-04 | B | SRS§3-M3 | GET /users/me/posts, PATCH /posts/{id} | post | TC-POST-02 | 🟢 |
 | FR-POST-05 | B | state-machines§1 | /posts/{id}/mark-found,/withdraw | post | — | 🟢 |
+| FR-POST-06（V4 扩展：认领完成关联寻物帖闭环） | B | SRS 未列，见 P8 | POST /claims/{id}/resolve-lost | claim+post | ClaimResolveIT | 🟢 |
 | FR-SEARCH-01 | B | SRS§3-M4 | GET /posts/search | search | TC-SEARCH-01 | 🟢 |
 | FR-MATCH-01 | B | SRS§3-M4 | GET /posts/{id}/matches | match | TC-MATCH-01 | 🟢 |
 | FR-MATCH-02 | B | SRS§3-M4 | GET /posts/{id}/matches | match | TC-MATCH-01 | 🟢 |

@@ -56,8 +56,14 @@ S=$(post "/claims/$CID/confirmations" "$TA"); expect WAITING_HANDOVER "$(echo "$
 S=$(post "/claims/$CID/confirmations" "$TA"); expect WAITING_HANDOVER "$(echo "$S" | jfield claimStatus)" "TC-HANDOVER-02 idempotent"
 S=$(post "/claims/$CID/confirmations" "$TB"); expect COMPLETED "$(echo "$S" | jfield claimStatus)" "both confirmed -> COMPLETED"
 expect COMPLETED "$(get "/posts/$FPID" "$TB" | python -c "import sys,json;print(json.load(sys.stdin)['data']['status'])")" "post COMPLETED"
-# 10 mark-found / 审计 / 限制
-expect OK "$(post "/posts/$LPID/mark-found" "$TA" | jcode)" "TC-POST-05 mark found"
+# 9b V4 闭环：认领完成后，申请人把自己的寻物帖(LPID)关联到本次认领 -> 寻物帖『已找回』
+HASLPID=$(get "/claims/$CID/resolved-candidates" "$TA" | LPID="$LPID" python -c "import sys,json,os;d=json.load(sys.stdin);print('yes' if int(os.environ['LPID']) in [i['id'] for i in d['data']['items']] else 'no')" 2>/dev/null)
+expect yes "$HASLPID" "V4 resolved-candidates include LPID"
+post "/claims/$CID/resolve-lost" "$TA" "{\"lostPostId\":$LPID}" > /dev/null
+expect COMPLETED "$(get "/posts/$LPID" "$TA" | python -c "import sys,json;print(json.load(sys.stdin)['data']['status'])")" "V4 resolve-lost -> LOST COMPLETED"
+# 10 mark-found / 审计 / 限制（LPID 已由 resolve-lost 闭环，这里另发一条未关联的 LOST 验证手动标记）
+LPID2=$(post /posts "$TA" "{\"type\":\"LOST\",\"title\":\"Lost umbrella $RUN\",\"category\":\"umbrella\",\"publicDescription\":\"my umbrella\",\"campus\":\"S\",\"eventLocation\":\"Lib\",\"eventTime\":\"2026-09-27T13:00:00Z\",\"imageFileIds\":[]}" | jfield id)
+expect OK "$(post "/posts/$LPID2/mark-found" "$TA" | jcode)" "TC-POST-05 mark found"
 expect OK "$(get "/admin/audit-logs?action=DISPUTE_RESOLVE" "$AT" | jcode)" "FR-AUDIT-01 audit filter"
 expect OK "$(get "/admin/audit-logs?action=CLAIM_REVIEW" "$AT" | jcode)" "B1 claim-review audit"
 UIDC=$(get /users/me "$TC" | jfield id)
