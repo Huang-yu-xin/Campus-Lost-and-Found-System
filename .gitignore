@@ -57,3 +57,6 @@ Thumbs.db
 
 # ===== 已弃用的微信云开发模板（决定采用 uni-app + Spring Boot 栈后归档，不纳入构建/版本库） =====
 campus-lost-and-found/
+
+# 本地任务书，不发布到远端
+/taskbooks/
