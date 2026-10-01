@@ -33,25 +33,29 @@ const loading = ref(false)
 
 async function load() {
   loading.value = true
-  try {
-    const [a, h, d, b, logs] = await Promise.all([
-      adminApi.listPosts({ status: 'ACTIVE', page: 1, pageSize: 1 }),
-      adminApi.listPosts({ status: 'HANDOVER', page: 1, pageSize: 1 }),
-      adminApi.listDisputes({ status: 'OPEN', page: 1, pageSize: 1 }),
-      adminApi.backups({ page: 1, pageSize: 1 }),
-      adminApi.auditLogs({ page: 1, pageSize: 10 })
-    ])
-    stats.active = a.total ?? 0
-    stats.handover = h.total ?? 0
-    stats.openDisputes = d.total ?? 0
-    stats.backups = b.total ?? 0
-    stats.lastBackup = (b.items && b.items[0]) ? b.items[0].status : '-'
-    recent.value = logs.items || []
-  } catch (e) {
-    ElMessage.error(e?.message || '加载失败')
-  } finally {
-    loading.value = false
+  // E30：Promise.allSettled 部分降级——单卡片失败显示"—"，不整页失败
+  const results = await Promise.allSettled([
+    adminApi.listPosts({ status: 'ACTIVE', page: 1, pageSize: 1 }),
+    adminApi.listPosts({ status: 'HANDOVER', page: 1, pageSize: 1 }),
+    adminApi.listDisputes({ status: 'OPEN', page: 1, pageSize: 1 }),
+    adminApi.backups({ page: 1, pageSize: 1 }),
+    adminApi.auditLogs({ page: 1, pageSize: 10 })
+  ])
+  const pick = (r, f) => (r.status === 'fulfilled' ? f(r.value) : '—')
+  stats.active = pick(results[0], v => v.total ?? 0)
+  stats.handover = pick(results[1], v => v.total ?? 0)
+  stats.openDisputes = pick(results[2], v => v.total ?? 0)
+  stats.backups = pick(results[3], v => v.total ?? 0)
+  // E3：最新备份显示完成时间，未完成则回退显示状态
+  stats.lastBackup = pick(results[3], v => {
+    const it = v.items && v.items[0]
+    return it ? (it.finishedAt || it.status) : '-'
+  })
+  recent.value = results[4].status === 'fulfilled' ? (results[4].value.items || []) : []
+  if (results.some(r => r.status === 'rejected')) {
+    ElMessage.error('部分数据加载失败')
   }
+  loading.value = false
 }
 onMounted(load)
 </script>

@@ -24,12 +24,15 @@
 <script setup>
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { authApi } from '../api'
 
 const route = useRoute()
 const router = useRouter()
 const active = computed(() => route.path)
 
-function logout() {
+async function logout() {
+  // E8：先请求服务端撤销会话（带 admin token），无论成败都清本地并跳登录
+  try { await authApi.logout() } catch (e) { /* ignore */ }
   localStorage.removeItem('clf_admin_token')
   router.push('/login')
 }

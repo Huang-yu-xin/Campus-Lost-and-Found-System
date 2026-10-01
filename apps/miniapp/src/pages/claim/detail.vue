@@ -25,22 +25,22 @@
     <!-- 发布者审核 -->
     <view v-if="claim.publisher && claim.status === 'PENDING'" class="card">
       <view class="mtitle">审核申请</view>
-      <button class="btn primary" @click="review('ACCEPT')">接受</button>
-      <button class="btn danger" @click="review('REJECT')">拒绝</button>
+      <button class="btn primary" :loading="acting" :disabled="acting" @click="review('ACCEPT')">接受</button>
+      <button class="btn danger" :disabled="acting" @click="review('REJECT')">拒绝</button>
     </view>
 
     <!-- 申请人撤销 -->
     <view v-if="claim.applicant && claim.status === 'PENDING'" class="card">
-      <button class="btn danger" @click="withdraw">撤销申请</button>
+      <button class="btn danger" :loading="acting" :disabled="acting" @click="withdraw">撤销申请</button>
     </view>
 
     <!-- 交接确认 / 争议 -->
     <view v-if="claim.status === 'WAITING_HANDOVER'" class="card">
       <view class="mtitle">交接</view>
       <view v-if="hasOpenDispute" class="paused">存在未决争议，交接已暂停，请等待管理员裁决</view>
-      <button class="btn primary" :disabled="hasOpenDispute" @click="confirm">我已完成交接</button>
-      <button class="btn" :disabled="hasOpenDispute" @click="showDisputeForm = !showDisputeForm">发起争议</button>
-      <button class="btn danger" v-if="claim.publisher && !hasOpenDispute" @click="cancelHandover">取消本次交接</button>
+      <button class="btn primary" :loading="acting" :disabled="hasOpenDispute || acting" @click="confirm">我已完成交接</button>
+      <button class="btn" :disabled="hasOpenDispute || acting" @click="showDisputeForm = !showDisputeForm">发起争议</button>
+      <button class="btn danger" v-if="claim.publisher && !hasOpenDispute" :disabled="acting" @click="cancelHandover">取消本次交接</button>
 
       <view v-if="showDisputeForm && !hasOpenDispute" class="dform">
         <textarea class="ta" v-model="disputeReason" placeholder="请填写争议原因" />
@@ -95,6 +95,7 @@
               </view>
               <button class="btn primary small" :loading="resolving" @click="doResolve(p.id)">关联</button>
             </view>
+            <button v-if="manualPosts.length && !manualNoMore" class="btn small" :loading="manualLoading" @click="loadManualPosts">加载更多</button>
           </view>
         </view>
       </block>
@@ -109,7 +110,7 @@
       <view v-if="messages.length === 0" class="meta">暂无留言</view>
       <view class="msgbar">
         <input class="in" v-model="msgText" placeholder="输入留言" />
-        <button class="btn small" @click="send">发送</button>
+        <button class="btn small" :loading="sending" :disabled="sending" @click="send">发送</button>
       </view>
     </view>
   </view>
@@ -122,6 +123,7 @@
 
 <script>
 import { claimApi, userApi, loadPrivateImage, uploadFile } from '../../api/index'
+import { pickCheckedImages } from '../../utils/image'
 import { claimStatusLabel } from '../../utils/labels'
 
 export default {
@@ -130,7 +132,9 @@ export default {
       claimId: null, claim: null, error: false, messages: [], disputes: [], eviImgs: [], msgText: '',
       showDisputeForm: false, disputeReason: '', disputeImgs: [], submittingDispute: false,
       // V4 闭环：关联寻物帖
-      candidates: [], resolvedDone: false, showManual: false, manualPosts: [], resolving: false
+      candidates: [], resolvedDone: false, showManual: false, manualPosts: [], resolving: false,
+      manualPage: 1, manualNoMore: false, manualLoading: false, // E19 手动选帖分页
+      acting: false, sending: false // E14 防连点
     }
   },
   computed: {
@@ -160,14 +164,22 @@ export default {
     },
     toggleManual() {
       this.showManual = !this.showManual
-      if (this.showManual && !this.manualPosts.length) this.loadManualPosts()
+      if (this.showManual && !this.manualPosts.length) {
+        this.manualPage = 1; this.manualNoMore = false; this.manualPosts = []
+        this.loadManualPosts()
+      }
     },
     async loadManualPosts() {
+      if (this.manualLoading || this.manualNoMore) return
+      this.manualLoading = true
       try {
-        const r = await userApi.myPosts(1)
+        const r = await userApi.myPosts(this.manualPage)
         const items = (r && r.items) || []
-        this.manualPosts = items.filter((p) => p.type === 'LOST' && p.status === 'ACTIVE')
-      } catch (e) { this.manualPosts = [] }
+        // 客户端筛本人进行中的寻物帖；按原始返回条数判断是否还有下一页
+        this.manualPosts = this.manualPosts.concat(items.filter((p) => p.type === 'LOST' && p.status === 'ACTIVE'))
+        if (items.length < 20) this.manualNoMore = true
+        else this.manualPage += 1
+      } catch (e) { if (this.manualPage === 1) this.manualPosts = [] } finally { this.manualLoading = false }
     },
     async doResolve(lostPostId) {
       this.resolving = true
@@ -205,44 +217,61 @@ export default {
         try { this.eviImgs.push(await loadPrivateImage(fid)) } catch (e) { /* skip */ }
       }
     },
-    previewEvi(i) { uni.previewImage({ current: i, urls: this.eviImgs }) },
+    previewEvi(i) { uni.previewImage({ current: this.eviImgs[i], urls: this.eviImgs }) }, // E13
     async review(decision) {
+      if (this.acting) return
       let reason = ''
       if (decision === 'REJECT') {
         const r = await new Promise((res) => uni.showModal({ title: '拒绝理由', editable: true, success: res }))
         if (!r.confirm) return
         reason = r.content
       }
-      await claimApi.review(this.claimId, decision, reason)
-      uni.showToast({ title: '已处理', icon: 'success' })
-      this.reloadAll()
+      this.acting = true
+      try {
+        await claimApi.review(this.claimId, decision, reason)
+        uni.showToast({ title: '已处理', icon: 'success' })
+        this.reloadAll()
+      } catch (e) { /* toasted */ } finally { this.acting = false }
     },
     async withdraw() {
+      if (this.acting) return
       const r = await new Promise((res) => uni.showModal({ title: '确认撤销申请?', success: res }))
       if (!r.confirm) return
-      await claimApi.withdraw(this.claimId)
-      uni.showToast({ title: '已撤销', icon: 'success' })
-      this.load()
+      this.acting = true
+      try {
+        await claimApi.withdraw(this.claimId)
+        uni.showToast({ title: '已撤销', icon: 'success' })
+        this.load()
+      } catch (e) { /* toasted */ } finally { this.acting = false }
     },
     async confirm() {
+      if (this.acting) return
+      this.acting = true
       try {
         const s = await claimApi.confirm(this.claimId)
         uni.showToast({ title: s.claimStatus === 'COMPLETED' ? '交接完成' : '已确认，等待对方', icon: 'none' })
         this.reloadAll()
-      } catch (e) { this.loadDisputes() }
+      } catch (e) {
+        // E16：确认失败同时重载 claim 与争议，反映最新状态
+        this.load()
+        this.loadDisputes()
+      } finally { this.acting = false }
     },
     async cancelHandover() {
+      if (this.acting) return
       const r = await new Promise((res) => uni.showModal({ title: '取消交接', editable: true, placeholderText: '请填写理由', success: res }))
       if (!r.confirm || !r.content) { if (r.confirm) uni.showToast({ title: '需填写理由', icon: 'none' }); return }
-      await claimApi.cancelHandover(this.claimId, r.content)
-      uni.showToast({ title: '已取消交接', icon: 'success' })
-      this.reloadAll()
+      this.acting = true
+      try {
+        await claimApi.cancelHandover(this.claimId, r.content)
+        uni.showToast({ title: '已取消交接', icon: 'success' })
+        this.reloadAll()
+      } catch (e) { /* toasted */ } finally { this.acting = false }
     },
-    addDisputeImg() {
-      uni.chooseImage({
-        count: 3 - this.disputeImgs.length,
-        success: (r) => r.tempFilePaths.forEach((p) => { if (this.disputeImgs.length < 3) this.disputeImgs.push(p) })
-      })
+    async addDisputeImg() {
+      // E20：复用公共选图预检
+      const paths = await pickCheckedImages(3 - this.disputeImgs.length)
+      for (const p of paths) { if (this.disputeImgs.length < 3) this.disputeImgs.push(p) }
     },
     async submitDispute() {
       if (!this.disputeReason.trim()) { uni.showToast({ title: '请填写争议原因', icon: 'none' }); return }
@@ -257,12 +286,15 @@ export default {
       } catch (e) { /* toasted */ } finally { this.submittingDispute = false }
     },
     async send() {
-      if (!this.msgText) return
+      if (this.sending) return
+      const text = (this.msgText || '').trim() // E15：trim 后空串拦截
+      if (!text) { uni.showToast({ title: '留言不能为空', icon: 'none' }); return }
+      this.sending = true
       try {
-        await claimApi.sendMessage(this.claimId, this.msgText)
+        await claimApi.sendMessage(this.claimId, text)
         this.msgText = ''
         this.loadMessages()
-      } catch (e) { /* toasted (e.g. USER_RESTRICTED) */ }
+      } catch (e) { /* toasted (e.g. USER_RESTRICTED) */ } finally { this.sending = false }
     },
     disputeStatusText(s) { return { OPEN: '处理中', RESOLVED: '已裁决', CLOSED: '已关闭' }[s] || s },
     resolutionText(t) { return { CONTINUE: '继续交接', TERMINATE_REOPEN: '终止并重开', CLOSE: '关闭处理' }[t] || t },
@@ -280,7 +312,7 @@ export default {
 .lb { font-size: 24rpx; color: #909399; }
 .evi { margin-top: 12rpx; }
 .imgs { display: flex; flex-wrap: wrap; margin-top: 8rpx; }
-.thumb { width: 150rpx; height: 150rpx; border-radius: 8rpx; margin: 6rpx; }
+.thumb { width: 150rpx; height: 150rpx; border-radius: 8rpx; margin: 6rpx; background: #f0f0f0; }
 .tl { margin-top: 16rpx; }
 .tli { font-size: 24rpx; color: #606266; margin-top: 8rpx; }
 .mtitle { font-weight: 600; margin-bottom: 14rpx; }

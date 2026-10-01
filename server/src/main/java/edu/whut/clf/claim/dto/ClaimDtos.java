@@ -18,7 +18,8 @@ public class ClaimDtos {
 
     public record ClaimSummary(
             Long id, Long postId, Long applicantId, String status,
-            LocalDateTime createdAt, LocalDateTime reviewedAt) {}
+            LocalDateTime createdAt, LocalDateTime reviewedAt,
+            String postTitle) {}   // E28：我的申请列表显示招领标题（联表 posts）
 
     public record ClaimDetail(
             Long id, Long postId, Long applicantId, String description, String status,

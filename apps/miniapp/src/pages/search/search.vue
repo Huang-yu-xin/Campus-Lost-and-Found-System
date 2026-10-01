@@ -22,7 +22,11 @@
       </view>
     </view>
 
-    <view v-if="list.length === 0 && !loading" class="empty">无匹配结果</view>
+    <view v-if="error && !loading" class="errstate">
+      <text class="errmsg">加载失败，请稍后重试</text>
+      <button class="rbtn" @click="reload">重试</button>
+    </view>
+    <view v-else-if="list.length === 0 && !loading" class="empty">无匹配结果</view>
     <view class="card" v-for="p in list" :key="p.id" @click="open(p.id)">
       <view class="row">
         <text :class="['badge', p.type === 'LOST' ? 'lost' : 'found']">{{ p.type === 'LOST' ? '寻物' : '招领' }}</text>
@@ -46,7 +50,7 @@ export default {
       categoryOptions: CATEGORIES,
       q: { keyword: '', type: '', category: '', campus: '' },
       fromStr: '', toStr: '',
-      list: [], page: 1, pageSize: 20, loading: false, noMore: false
+      list: [], page: 1, pageSize: 20, loading: false, noMore: false, error: false, _seq: 0
     }
   },
   onLoad(query) {
@@ -56,6 +60,7 @@ export default {
   onReachBottom() {
     if (!this.noMore && !this.loading) this.loadMore()
   },
+  onPullDownRefresh() { this.reload().finally(() => uni.stopPullDownRefresh()) }, // E9
   methods: {
     onPickCategory(e) { this.q.category = this.categoryOptions[Number(e.detail.value)] },
     params() {
@@ -65,12 +70,19 @@ export default {
       return p
     },
     async reload() {
-      this.page = 1; this.noMore = false; this.loading = true
+      const seq = ++this._seq // E11
+      this.page = 1; this.noMore = false; this.loading = true; this.error = false
       try {
         const res = await postApi.search(this.params())
+        if (seq !== this._seq) return
         this.list = res.items || []
         if (this.list.length < this.pageSize) this.noMore = true
-      } catch (e) { /* toasted */ } finally { this.loading = false }
+      } catch (e) {
+        if (seq !== this._seq) return
+        this.error = true; this.list = []
+      } finally {
+        if (seq === this._seq) this.loading = false
+      }
     },
     async loadMore() {
       this.page += 1; this.loading = true
@@ -79,7 +91,7 @@ export default {
         const items = res.items || []
         this.list = this.list.concat(items)
         if (items.length < this.pageSize) this.noMore = true
-      } catch (e) { /* toasted */ } finally { this.loading = false }
+      } catch (e) { this.page -= 1 /* E10 */ } finally { this.loading = false }
     },
     reset() {
       this.q = { keyword: '', type: '', category: '', campus: '' }
@@ -110,4 +122,7 @@ export default {
 .ptitle { font-size: 30rpx; font-weight: 600; }
 .meta { color: #909399; font-size: 24rpx; margin-top: 10rpx; }
 .empty, .tipc { text-align: center; color: #c0c4cc; margin: 40rpx 0; }
+.errstate { text-align: center; margin: 60rpx 0; }
+.errmsg { display: block; color: #909399; font-size: 28rpx; margin-bottom: 24rpx; }
+.rbtn { display: inline-block; background: #2b6cb0; color: #fff; font-size: 26rpx; padding: 8rpx 40rpx; border-radius: 8rpx; }
 </style>

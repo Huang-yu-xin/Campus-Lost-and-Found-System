@@ -63,16 +63,26 @@ function reload() { page.value = 1; load() }
 function onPage(p) { page.value = p; load() }
 
 async function remove(row) {
-  const { value } = await ElMessageBox.prompt('下架理由', '下架', { inputValidator: (v) => !!v || '请填写理由' })
-  await adminApi.removePost(row.id, value)
-  ElMessage.success('已下架')
-  load()
+  try {
+    const { value } = await ElMessageBox.prompt('下架理由', '下架', { inputValidator: (v) => !!v || '请填写理由' })
+    await adminApi.removePost(row.id, value)
+    ElMessage.success('已下架')
+    load()
+  } catch (e) {
+    if (e === 'cancel' || e === 'close') return // 取消/关闭弹窗静默
+    ElMessage.error(e?.message || '下架失败')
+  }
 }
 async function restore(row) {
-  const { value } = await ElMessageBox.prompt('恢复理由', '恢复', { inputValidator: (v) => !!v || '请填写理由' })
-  await adminApi.restorePost(row.id, value)
-  ElMessage.success('已恢复')
-  load()
+  try {
+    const { value } = await ElMessageBox.prompt('恢复理由', '恢复', { inputValidator: (v) => !!v || '请填写理由' })
+    await adminApi.restorePost(row.id, value)
+    ElMessage.success('已恢复')
+    load()
+  } catch (e) {
+    if (e === 'cancel' || e === 'close') return
+    ElMessage.error(e?.message || '恢复失败')
+  }
 }
 
 onMounted(load)

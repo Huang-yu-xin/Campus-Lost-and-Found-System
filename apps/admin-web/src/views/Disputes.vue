@@ -68,7 +68,7 @@
       </template>
     </el-dialog>
 
-    <el-image-viewer v-if="viewerUrl" :url-list="[viewerUrl]" @close="viewerUrl = ''" />
+    <el-image-viewer v-if="viewerUrl" :url-list="[viewerUrl]" @close="closeViewer" />
   </div>
 </template>
 
@@ -112,25 +112,44 @@ async function openDetail(id) {
   dialog.value = true
 }
 async function assign() {
-  await adminApi.assignDispute(current.value.id)
-  ElMessage.success('已受理')
-  current.value = await adminApi.getDispute(current.value.id)
-  load()
+  try {
+    await adminApi.assignDispute(current.value.id)
+    ElMessage.success('已受理')
+    current.value = await adminApi.getDispute(current.value.id)
+    load()
+  } catch (e) {
+    ElMessage.error(e?.message || '受理失败')
+  }
 }
 async function viewEvidence(fid) {
   try {
+    closeViewer() // 打开新图前先释放上一张的 objectURL
     viewerUrl.value = await fetchFileObjectUrl(fid)
   } catch (e) {
     ElMessage.error(e.message || '无权查看，请先受理')
   }
 }
+// E6：关闭预览时释放 objectURL，避免内存泄漏
+function closeViewer() {
+  if (viewerUrl.value) {
+    URL.revokeObjectURL(viewerUrl.value)
+    viewerUrl.value = ''
+  }
+}
 async function resolve() {
+  // E5：裁决前若未受理给提示
+  if (!assigned.value) { ElMessage.warning('请先受理该争议再裁决'); return }
   if (!note.value) { ElMessage.warning('请填写裁决理由'); return }
-  await ElMessageBox.confirm(previewText.value, '确认裁决', { type: 'warning' })
-  await adminApi.resolveDispute(current.value.id, resolutionType.value, note.value)
-  ElMessage.success('裁决已提交')
-  dialog.value = false
-  load()
+  try {
+    await ElMessageBox.confirm(previewText.value, '确认裁决', { type: 'warning' })
+    await adminApi.resolveDispute(current.value.id, resolutionType.value, note.value)
+    ElMessage.success('裁决已提交')
+    dialog.value = false
+    load()
+  } catch (e) {
+    if (e === 'cancel' || e === 'close') return
+    ElMessage.error(e?.message || '裁决失败')
+  }
 }
 load()
 </script>

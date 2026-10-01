@@ -13,7 +13,11 @@ request.interceptors.request.use((config) => {
   return config
 })
 
+// E4：去重标志——并发多请求同时 401 时只弹一次提示、只跳一次登录
+let unauthorizedHandled = false
 function handleUnauthorized() {
+  if (unauthorizedHandled) return
+  unauthorizedHandled = true
   localStorage.removeItem('clf_admin_token')
   if (!location.pathname.includes('/login')) {
     ElMessage.warning('登录已失效，请重新登录')

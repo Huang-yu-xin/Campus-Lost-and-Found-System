@@ -9,7 +9,10 @@
       <view class="desc">{{ post.publicDescription }}</view>
 
       <view class="imgs" v-if="post.imageFileIds && post.imageFileIds.length">
-        <image class="img" v-for="(fid, i) in post.imageFileIds" :key="fid" :src="imgUrl(fid)" mode="aspectFill" @click="previewPublic(i)" />
+        <template v-for="(fid, i) in post.imageFileIds" :key="fid">
+          <image v-if="!brokenFids[fid]" class="img" :src="imgUrl(fid)" mode="aspectFill" @click="previewPublic(i)" @error="brokenFids[fid] = true" />
+          <view v-else class="img ph-img" />
+        </template>
       </view>
 
       <view class="meta">类别：{{ post.category }}</view>
@@ -74,12 +77,13 @@
 <script>
 import { postApi, claimApi, leadApi, uploadFile, fileUrl } from '../../api/index'
 import { getToken } from '../../utils/request'
+import { pickCheckedImages } from '../../utils/image'
 import { postStatusLabel, typeLabel } from '../../utils/labels'
 
 export default {
   data() {
     return {
-      id: null, post: null, matches: [], error: false,
+      id: null, post: null, matches: [], error: false, brokenFids: {},
       showClaimForm: false, claimDesc: '', claimImgs: [],
       showLeadForm: false, leadBody: '', leadImgs: [],
       submitting: false
@@ -87,7 +91,9 @@ export default {
   },
   onLoad(query) {
     this.id = query.id
-    this.load()
+  },
+  onShow() {
+    if (this.id) this.load() // E24：编辑返回后刷新
   },
   methods: {
     postStatusLabel, typeLabel,
@@ -109,10 +115,13 @@ export default {
       return true
     },
     previewPublic(i) {
-      uni.previewImage({ current: i, urls: this.post.imageFileIds.map((fid) => fileUrl(fid)) })
+      const urls = this.post.imageFileIds.map((fid) => fileUrl(fid))
+      uni.previewImage({ current: urls[i], urls }) // E13：current 传字符串
     },
-    addImg(arr) {
-      uni.chooseImage({ count: 3 - arr.length, success: (r) => r.tempFilePaths.forEach((p) => { if (arr.length < 3) arr.push(p) }) })
+    async addImg(arr) {
+      // E20：复用公共选图预检
+      const paths = await pickCheckedImages(3 - arr.length)
+      for (const p of paths) { if (arr.length < 3) arr.push(p) }
     },
     goEdit() { uni.navigateTo({ url: '/pages/publish/publish?id=' + this.id }) },
     async submitClaim() {
@@ -177,6 +186,7 @@ export default {
 .desc { font-size: 28rpx; margin: 16rpx 0; }
 .imgs { display: flex; flex-wrap: wrap; margin: 10rpx 0; }
 .img { width: 200rpx; height: 200rpx; border-radius: 8rpx; margin: 6rpx; }
+.ph-img { background: #f0f0f0; display: inline-block; }
 .imgbox { position: relative; width: 150rpx; height: 150rpx; margin: 6rpx; }
 .thumb { width: 150rpx; height: 150rpx; border-radius: 8rpx; }
 .del { position: absolute; top: -10rpx; right: -10rpx; background: #f56c6c; color: #fff; width: 34rpx; height: 34rpx; border-radius: 50%; text-align: center; line-height: 34rpx; }

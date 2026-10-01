@@ -49,14 +49,24 @@ async function load() {
 function reload() { page.value = 1; load() }
 function onPage(p) { page.value = p; load() }
 async function restrict(row) {
-  const { value } = await ElMessageBox.prompt('限制理由', '限制用户', { inputValidator: (v) => !!v || '请填写理由' })
-  await adminApi.restrictUser(row.id, value)
-  ElMessage.success('已限制'); load()
+  try {
+    const { value } = await ElMessageBox.prompt('限制理由', '限制用户', { inputValidator: (v) => !!v || '请填写理由' })
+    await adminApi.restrictUser(row.id, value)
+    ElMessage.success('已限制'); load()
+  } catch (e) {
+    if (e === 'cancel' || e === 'close') return
+    ElMessage.error(e?.message || '限制失败')
+  }
 }
 async function unrestrict(row) {
-  const { value } = await ElMessageBox.prompt('解除理由', '解除限制', { inputValidator: (v) => !!v || '请填写理由' })
-  await adminApi.unrestrictUser(row.id, value)
-  ElMessage.success('已解除'); load()
+  try {
+    const { value } = await ElMessageBox.prompt('解除理由', '解除限制', { inputValidator: (v) => !!v || '请填写理由' })
+    await adminApi.unrestrictUser(row.id, value)
+    ElMessage.success('已解除'); load()
+  } catch (e) {
+    if (e === 'cancel' || e === 'close') return
+    ElMessage.error(e?.message || '解除失败')
+  }
 }
 onMounted(load)
 </script>

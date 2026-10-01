@@ -24,7 +24,11 @@
         <text class="t">{{ title(it) }}</text>
         <text class="st">{{ statusText(it) }}</text>
       </view>
-      <view v-if="items.length === 0 && !loading" class="empty">暂无记录</view>
+      <view v-if="error && !loading" class="errstate">
+        <text class="errmsg">加载失败，请稍后重试</text>
+        <button class="rbtn" @click="switchTab(tab)">重试</button>
+      </view>
+      <view v-else-if="items.length === 0 && !loading" class="empty">暂无记录</view>
       <view v-if="noMore && items.length" class="tipc">没有更多了</view>
       <button class="btn" @click="logout">退出登录</button>
     </view>
@@ -38,12 +42,16 @@ import { postStatusLabel, claimStatusLabel, leadStatusLabel } from '../../utils/
 
 export default {
   data() {
-    return { me: null, campusText: '校园身份未认证', tab: 'posts', items: [], page: 1, pageSize: 20, loading: false, noMore: false }
+    return { me: null, campusText: '校园身份未认证', tab: 'posts', items: [], page: 1, pageSize: 20, loading: false, noMore: false, error: false, _seq: 0 }
   },
   onShow() {
     if (getToken()) { this.loadMe() } else { this.me = null }
   },
   onReachBottom() { if (!this.noMore && !this.loading) this.loadMore() },
+  onPullDownRefresh() { // E9
+    const done = () => uni.stopPullDownRefresh()
+    if (getToken()) { this.loadMe().finally(done) } else { this.me = null; done() }
+  },
   methods: {
     async loadMe() {
       try {
@@ -63,12 +71,19 @@ export default {
       return userApi.receivedLeads(page)
     },
     async switchTab(t) {
-      this.tab = t; this.page = 1; this.noMore = false; this.loading = true
+      const seq = ++this._seq // E11
+      this.tab = t; this.page = 1; this.noMore = false; this.loading = true; this.error = false
       try {
         const res = await this.fetch(1)
+        if (seq !== this._seq) return
         this.items = res.items || []
         if (this.items.length < this.pageSize) this.noMore = true
-      } catch (e) { this.items = [] } finally { this.loading = false }
+      } catch (e) {
+        if (seq !== this._seq) return
+        this.error = true; this.items = []
+      } finally {
+        if (seq === this._seq) this.loading = false
+      }
     },
     async loadMore() {
       this.page += 1; this.loading = true
@@ -77,11 +92,11 @@ export default {
         const items = res.items || []
         this.items = this.items.concat(items)
         if (items.length < this.pageSize) this.noMore = true
-      } catch (e) { /* */ } finally { this.loading = false }
+      } catch (e) { this.page -= 1 /* E10 */ } finally { this.loading = false }
     },
     title(it) {
       if (this.tab === 'posts') return it.title
-      if (this.tab === 'claims') return '申请 · ' + (it.postId ? ('招领#' + it.postId) : ('#' + it.id))
+      if (this.tab === 'claims') return '申请 · ' + (it.postTitle || ('招领#' + it.postId))
       if (this.tab === 'rclaims') return '收到申请 · ' + (it.postTitle || ('招领#' + it.postId))
       if (this.tab === 'leads') return '线索 · 寻物#' + it.lostPostId
       return '收到线索 · ' + (it.postTitle || ('寻物#' + it.lostPostId))
@@ -94,18 +109,17 @@ export default {
     open(it) {
       if (this.tab === 'posts') uni.navigateTo({ url: '/pages/detail/detail?id=' + it.id })
       else if (this.tab === 'claims' || this.tab === 'rclaims') uni.navigateTo({ url: '/pages/claim/detail?claimId=' + it.id })
-      else if (this.tab === 'rleads') uni.navigateTo({ url: '/pages/lead/detail?leadId=' + it.id + '&owner=1' })
-      else uni.navigateTo({ url: '/pages/lead/detail?leadId=' + it.id })
+      else uni.navigateTo({ url: '/pages/lead/detail?leadId=' + it.id }) // E18：owner 由后端 lead.owner 决定，不再传 URL 参数
     },
     editProfile() {
       // uni 单输入弹窗限制：昵称、校区分两步录入，一并 PATCH
       uni.showModal({
-        title: '修改昵称', editable: true, placeholderText: this.me.nickname || '昵称',
+        title: '修改昵称', editable: true, maxlength: 64, placeholderText: this.me.nickname || '昵称',
         success: (r1) => {
           if (!r1.confirm) return
           const nickname = (r1.content || '').trim() || this.me.nickname
           uni.showModal({
-            title: '修改校区（可留空）', editable: true, placeholderText: this.me.campus || '校区',
+            title: '修改校区（可留空）', editable: true, maxlength: 64, placeholderText: this.me.campus || '校区',
             success: async (r2) => {
               if (!r2.confirm) return
               const payload = { nickname }
@@ -145,5 +159,8 @@ export default {
 .item { background: #fff; border-radius: 10rpx; padding: 22rpx; margin-bottom: 12rpx; display: flex; justify-content: space-between; }
 .t { font-size: 28rpx; } .st { color: #909399; font-size: 24rpx; }
 .empty, .tipc { text-align: center; color: #c0c4cc; margin: 40rpx 0; }
+.errstate { text-align: center; margin: 60rpx 0; }
+.errmsg { display: block; color: #909399; font-size: 28rpx; margin-bottom: 24rpx; }
+.rbtn { display: inline-block; background: #2b6cb0; color: #fff; font-size: 26rpx; padding: 8rpx 40rpx; border-radius: 8rpx; }
 .btn { margin-top: 20rpx; } .btn.primary { background: #2b6cb0; color: #fff; }
 </style>

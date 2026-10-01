@@ -5,8 +5,8 @@ export const authApi = {
   mockLogin: (testUser, nickname) => http.post('/auth/mock/login', { testUser, nickname }),
   wechatLogin: (code, nickname) => http.post('/auth/wechat/login', { code, nickname }),
   campusCapabilities: () => http.get('/auth/campus/capabilities'),
-  logout: () => http.post('/auth/logout'),
-  refresh: () => http.post('/auth/refresh')
+  logout: () => http.post('/auth/logout')
+  // E31：authApi.refresh 死代码已删除（前端无续期入口，由重新登录处理）
 }
 
 export const userApi = {
@@ -68,6 +68,13 @@ export function uploadFile(filePath, purpose) {
       formData: { purpose },
       header: getToken() ? { Authorization: 'Bearer ' + getToken() } : {},
       success: (res) => {
+        // E26：先校验 HTTP 状态码 2xx，再解析响应体
+        if (res.statusCode < 200 || res.statusCode >= 300) {
+          const msg = res.statusCode === 401 ? '请先登录' : '上传失败(' + res.statusCode + ')'
+          uni.showToast({ title: msg, icon: 'none' })
+          reject({ code: 'HTTP_' + res.statusCode, statusCode: res.statusCode, message: msg })
+          return
+        }
         let body
         try {
           body = JSON.parse(res.data)

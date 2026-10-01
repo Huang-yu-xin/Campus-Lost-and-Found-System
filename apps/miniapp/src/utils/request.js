@@ -28,6 +28,8 @@ export function request(options) {
       url: API_BASE + options.url,
       method: options.method || 'GET',
       data: options.data || {},
+      timeout: 15000, // E27
+
       header: {
         'Content-Type': 'application/json',
         ...(getToken() ? { Authorization: 'Bearer ' + getToken() } : {})

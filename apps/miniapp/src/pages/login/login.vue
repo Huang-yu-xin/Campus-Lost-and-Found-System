@@ -6,11 +6,11 @@
     <view class="card">
       <view class="label">测试登录（开发环境）</view>
       <input class="input" v-model="testUser" placeholder="输入测试用户名，如 userA" />
-      <button class="btn primary" @click="doMockLogin">测试登录</button>
+      <button class="btn primary" :loading="loading" :disabled="loading" @click="doMockLogin">测试登录</button>
 
       <view class="divider">或</view>
 
-      <button class="btn" open-type="getUserInfo" @click="doWechatLogin">微信一键登录</button>
+      <button class="btn" :loading="loading" :disabled="loading" @click="doWechatLogin">微信一键登录</button>
       <view class="hint">微信登录需后端配置 AppSecret；未配置时请用测试登录。</view>
     </view>
 

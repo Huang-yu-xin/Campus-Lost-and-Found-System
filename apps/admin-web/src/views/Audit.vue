@@ -5,12 +5,12 @@
       <el-tab-pane label="审计日志" name="audit">
         <el-form :inline="true">
           <el-form-item label="动作">
-            <el-select v-model="action" clearable placeholder="全部" style="width:200px" @change="loadAudit">
+            <el-select v-model="action" clearable placeholder="全部" style="width:200px" @change="reloadAudit">
               <el-option v-for="a in actions" :key="a" :label="a" :value="a" />
             </el-select>
           </el-form-item>
           <el-form-item label="对象">
-            <el-select v-model="targetType" clearable placeholder="全部" style="width:150px" @change="loadAudit">
+            <el-select v-model="targetType" clearable placeholder="全部" style="width:150px" @change="reloadAudit">
               <el-option v-for="t in targets" :key="t" :label="t" :value="t" />
             </el-select>
           </el-form-item>
@@ -52,8 +52,8 @@ import { ElMessage } from 'element-plus'
 import { adminApi } from '../api'
 
 const tab = ref('audit')
-const actions = ['CLAIM_REVIEW', 'DISPUTE_RAISE', 'DISPUTE_ASSIGN', 'DISPUTE_RESOLVE', 'POST_REMOVE', 'POST_RESTORE', 'USER_RESTRICT', 'USER_UNRESTRICT', 'BACKUP_RUN']
-const targets = ['POST', 'USER', 'CLAIM', 'DISPUTE', 'BACKUP']
+const actions = ['CLAIM_REVIEW', 'DISPUTE_RAISE', 'DISPUTE_ASSIGN', 'DISPUTE_RESOLVE', 'POST_REMOVE', 'POST_RESTORE', 'USER_RESTRICT', 'USER_UNRESTRICT', 'BACKUP_RUN', 'LOST_RESOLVED', 'HANDOVER_CANCELLED', 'LOST_MARK_FOUND', 'LEAD_REVIEW']
+const targets = ['POST', 'USER', 'CLAIM', 'DISPUTE', 'BACKUP', 'LEAD']
 const action = ref('')
 const targetType = ref('')
 const logs = ref([]); const loadingA = ref(false); const totalA = ref(0); const pageA = ref(1); const pageSize = 20
@@ -68,6 +68,8 @@ async function loadAudit() {
   } catch (e) { ElMessage.error(e?.message || '加载失败') } finally { loadingA.value = false }
 }
 function onPageA(p) { pageA.value = p; loadAudit() }
+// E1：切换筛选时重置页码再查询
+function reloadAudit() { pageA.value = 1; loadAudit() }
 async function loadBackups() {
   loadingB.value = true
   try { backups.value = (await adminApi.backups({ page: 1, pageSize: 50 })).items || [] }

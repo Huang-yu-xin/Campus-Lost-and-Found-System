@@ -1,7 +1,9 @@
 import request from './request'
 
 export const authApi = {
-  login: (username, password) => request.post('/admin/auth/login', { username, password })
+  login: (username, password) => request.post('/admin/auth/login', { username, password }),
+  // E8：退出登录调用通用 logout 使服务端会话失效
+  logout: () => request.post('/auth/logout')
 }
 
 export const adminApi = {

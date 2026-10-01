@@ -5,11 +5,11 @@
       <text :class="['tab', form.type === 'FOUND' ? 'on' : '']" @click="form.type = 'FOUND'">招领</text>
     </view>
 
-    <view class="field"><text class="lb">标题</text><input class="in" v-model="form.title" placeholder="简要标题" /></view>
+    <view class="field"><text class="lb">标题</text><input class="in" v-model="form.title" maxlength="128" placeholder="简要标题" /></view>
     <view class="field"><text class="lb">类别</text><picker class="in" mode="selector" :range="categoryOptions" @change="onPickCategory"><view class="in">{{ form.category || '请选择类别' }}</view></picker></view>
-    <view class="field"><text class="lb">描述</text><textarea class="ta" v-model="form.publicDescription" placeholder="公开描述（招领请勿公开唯一性证明细节）" /></view>
-    <view class="field"><text class="lb">校区</text><input class="in" v-model="form.campus" placeholder="可选" /></view>
-    <view class="field"><text class="lb">{{ form.type === 'LOST' ? '丢失地点' : '拾取地点' }}</text><input class="in" v-model="form.eventLocation" placeholder="地点" /></view>
+    <view class="field"><text class="lb">描述</text><textarea class="ta" v-model="form.publicDescription" maxlength="2000" placeholder="公开描述（招领请勿公开唯一性证明细节）" /></view>
+    <view class="field"><text class="lb">校区</text><input class="in" v-model="form.campus" maxlength="64" placeholder="可选" /></view>
+    <view class="field"><text class="lb">{{ form.type === 'LOST' ? '丢失地点' : '拾取地点' }}</text><input class="in" v-model="form.eventLocation" maxlength="128" placeholder="地点" /></view>
     <view class="field"><text class="lb">{{ form.type === 'LOST' ? '丢失时间' : '拾取时间' }}</text>
       <picker mode="date" :value="dateStr" @change="onDate"><view class="in">{{ dateStr || '选择日期' }}</view></picker>
     </view>
@@ -33,6 +33,7 @@
 
 <script>
 import { postApi, uploadFile, fileUrl } from '../../api/index'
+import { pickCheckedImages } from '../../utils/image'
 
 // 类别字典规范子类（镜像 server/src/main/resources/matching/category-dictionary.v1.txt 的展示名）
 const CATEGORIES = ['雨伞', '校园卡', '钥匙', '耳机', '水杯', '手机', '钱包', '充电宝', '书本教材', '证件', '手表饰品', '衣物', '笔记本电脑', '眼镜', '其他']
@@ -56,7 +57,15 @@ export default {
   methods: {
     onPickCategory(e) { this.form.category = this.categoryOptions[Number(e.detail.value)] },
     async loadForEdit(id) {
-      const d = await postApi.detail(id)
+      let d
+      try {
+        d = await postApi.detail(id)
+      } catch (e) {
+        // E23：加载失败 → 提示并返回上一页
+        uni.showToast({ title: '加载失败', icon: 'none' })
+        setTimeout(() => uni.navigateBack(), 800)
+        return
+      }
       if (!d.mine) {
         uni.showToast({ title: '只能编辑自己的发布', icon: 'none' })
         setTimeout(() => uni.navigateBack(), 800)
@@ -73,48 +82,20 @@ export default {
       this.dateStr = e.detail.value
       this.form.eventTime = e.detail.value + 'T00:00:00'
     },
-    chooseImage() {
-      uni.chooseImage({
-        count: 6 - this.images.length,
-        success: async (r) => {
-          const files = (r.tempFiles && r.tempFiles.length)
-            ? r.tempFiles
-            : (r.tempFilePaths || []).map((p) => ({ path: p, size: 0 }))
-          for (const f of files) {
-            if (this.images.length >= 6) break
-            const path = f.path || f
-            if (f.size && f.size > 5 * 1024 * 1024) {
-              uni.showToast({ title: '单张图片不能超过 5MB', icon: 'none' })
-              continue
-            }
-            const ok = await this.checkImageType(path)
-            if (!ok) {
-              uni.showToast({ title: '仅支持 jpg/png/webp', icon: 'none' })
-              continue
-            }
-            this.images.push({ url: path, localPath: path })
-          }
-        }
-      })
-    },
-    checkImageType(path) {
-      // 客户端预校验；后端仍做 magic-byte 权威校验
-      return new Promise((resolve) => {
-        uni.getImageInfo({
-          src: path,
-          success: (info) => {
-            const t = (info.type || '').toLowerCase()
-            resolve(!t || ['jpg', 'jpeg', 'png', 'webp'].includes(t))
-          },
-          fail: () => resolve(true)
-        })
-      })
+    async chooseImage() {
+      // E20：复用公共选图预检
+      const paths = await pickCheckedImages(6 - this.images.length)
+      for (const p of paths) {
+        if (this.images.length >= 6) break
+        this.images.push({ url: p, localPath: p })
+      }
     },
     removeImg(i) {
       this.images.splice(i, 1)
     },
     preview(i) {
-      uni.previewImage({ current: i, urls: this.images.map((x) => x.url) })
+      const urls = this.images.map((x) => x.url)
+      uni.previewImage({ current: urls[i], urls }) // E13：current 传字符串
     },
     async submit() {
       if (!this.form.title || !this.form.category || !this.form.publicDescription) {
@@ -137,11 +118,13 @@ export default {
         if (this.editId) {
           await postApi.update(this.editId, payload)
           uni.showToast({ title: '已保存', icon: 'success' })
+          // E22：编辑来源 → 返回上一页（详情页 onShow 会刷新）
+          setTimeout(() => uni.navigateBack(), 600)
         } else {
           await postApi.create(payload)
           uni.showToast({ title: '发布成功', icon: 'success' })
+          setTimeout(() => uni.switchTab({ url: '/pages/index/index' }), 600)
         }
-        setTimeout(() => uni.switchTab({ url: '/pages/index/index' }), 600)
       } catch (e) {
         // 错误 message 已由 request 层 toast（如 POST_EDIT_LOCKED）
       } finally {

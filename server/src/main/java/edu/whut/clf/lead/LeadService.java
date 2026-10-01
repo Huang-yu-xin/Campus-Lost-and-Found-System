@@ -82,7 +82,7 @@ public class LeadService {
             evidenceMapper.insert(lead.getId(), fid);
             fileService.markBound(fid);
         }
-        return toItem(lead, true);
+        return toItem(lead, false); // 提交者是报告人，非寻物发布者
     }
 
     /** 查看单条线索（线索提交者或寻物发布者可见，否则 404）。 */
@@ -97,7 +97,7 @@ public class LeadService {
         if (!isReporter && !isPublisher) {
             throw BusinessException.of(ErrorCode.LEAD_NOT_FOUND);
         }
-        return toItem(lead, true);
+        return toItem(lead, isPublisher); // E18：owner = 是否寻物发布者
     }
 
     /** 寻物发布者查看收到的线索。 */
@@ -106,14 +106,14 @@ public class LeadService {
         if (!Objects.equals(post.getPublisherId(), userId)) {
             throw BusinessException.of(ErrorCode.FORBIDDEN);
         }
-        return leadMapper.findByPost(postId).stream().map(l -> toItem(l, true)).toList();
+        return leadMapper.findByPost(postId).stream().map(l -> toItem(l, true)).toList(); // 发布者视角 owner=true
     }
 
     public PageResult<LeadItem> myLeads(Long userId, int page, int pageSize) {
         Pageable pg = Pageable.of(page, pageSize);
         List<LostLead> list = leadMapper.findByReporter(userId, pg.offset(), pg.size());
         long total = leadMapper.countByReporter(userId);
-        return PageResult.of(list.stream().map(l -> toItem(l, true)).toList(), total, pg.page(), pg.size());
+        return PageResult.of(list.stream().map(l -> toItem(l, false)).toList(), total, pg.page(), pg.size()); // 报告人视角 owner=false
     }
 
     /** 我作为寻物发布者收到的所有线索（B10 / FR-LEAD-02）。 */
@@ -157,9 +157,9 @@ public class LeadService {
                 "SUCCESS", "{\"status\":\"" + target.name() + "\"}");
     }
 
-    private LeadItem toItem(LostLead l, boolean includeEvidence) {
-        List<Long> ev = includeEvidence ? evidenceMapper.findFileIds(l.getId()) : List.of();
+    private LeadItem toItem(LostLead l, boolean owner) {
+        List<Long> ev = evidenceMapper.findFileIds(l.getId());
         return new LeadItem(l.getId(), l.getLostPostId(), l.getReporterId(), l.getBody(),
-                l.getStatus(), l.getCreatedAt(), ev);
+                l.getStatus(), l.getCreatedAt(), owner, ev);
     }
 }

@@ -124,9 +124,10 @@ public class ClaimService {
 
     public PageResult<ClaimSummary> myClaims(Long userId, int page, int pageSize) {
         Pageable pg = Pageable.of(page, pageSize);
-        List<Claim> list = claimMapper.findByApplicant(userId, pg.offset(), pg.size());
+        // E28：联表取 postTitle
+        List<ClaimSummary> list = claimMapper.findSummaryByApplicant(userId, pg.offset(), pg.size());
         long total = claimMapper.countByApplicant(userId);
-        return PageResult.of(list.stream().map(this::toSummary).toList(), total, pg.page(), pg.size());
+        return PageResult.of(list, total, pg.page(), pg.size());
     }
 
     /** 我作为发布者收到的所有申请（B10 / FR-CLAIM-02）。 */
@@ -425,7 +426,8 @@ public class ClaimService {
     }
 
     private ClaimSummary toSummary(Claim c) {
+        // postClaims(发布者查看单帖申请)场景已知帖，postTitle 置 null
         return new ClaimSummary(c.getId(), c.getPostId(), c.getApplicantId(), c.getStatus(),
-                c.getCreatedAt(), c.getReviewedAt());
+                c.getCreatedAt(), c.getReviewedAt(), null);
     }
 }

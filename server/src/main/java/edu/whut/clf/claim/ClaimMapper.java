@@ -1,5 +1,6 @@
 package edu.whut.clf.claim;
 
+import edu.whut.clf.claim.dto.ClaimDtos.ClaimSummary;
 import edu.whut.clf.claim.dto.ReceivedClaimItem;
 import edu.whut.clf.claim.model.Claim;
 import org.apache.ibatis.annotations.*;
@@ -34,6 +35,26 @@ public interface ClaimMapper {
 
     @Select("SELECT * FROM claims WHERE applicant_id = #{userId} ORDER BY created_at DESC LIMIT #{offset}, #{limit}")
     List<Claim> findByApplicant(@Param("userId") Long userId, @Param("offset") long offset, @Param("limit") int limit);
+
+    /** E28：我的申请（联表 posts 取标题），构造器显式映射到 ClaimSummary record。 */
+    @ConstructorArgs({
+            @Arg(column = "id", javaType = Long.class),
+            @Arg(column = "post_id", javaType = Long.class),
+            @Arg(column = "applicant_id", javaType = Long.class),
+            @Arg(column = "status", javaType = String.class),
+            @Arg(column = "created_at", javaType = LocalDateTime.class),
+            @Arg(column = "reviewed_at", javaType = LocalDateTime.class),
+            @Arg(column = "post_title", javaType = String.class)
+    })
+    @Select("""
+            SELECT c.id, c.post_id, c.applicant_id, c.status, c.created_at, c.reviewed_at, p.title AS post_title
+            FROM claims c JOIN posts p ON c.post_id = p.id
+            WHERE c.applicant_id = #{userId}
+            ORDER BY c.created_at DESC
+            LIMIT #{offset}, #{limit}
+            """)
+    List<ClaimSummary> findSummaryByApplicant(@Param("userId") Long userId,
+                                              @Param("offset") long offset, @Param("limit") int limit);
 
     @Select("SELECT COUNT(*) FROM claims WHERE applicant_id = #{userId}")
     long countByApplicant(Long userId);

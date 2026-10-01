@@ -14,5 +14,7 @@ public class LeadDtos {
 
     public record LeadItem(
             Long id, Long lostPostId, Long reporterId, String body, String status,
-            LocalDateTime createdAt, List<Long> evidenceFileIds) {}
+            LocalDateTime createdAt,
+            boolean owner,   // E18：当前查看者是否为寻物发布者（可处理线索），前端据此控制处理卡可见性
+            List<Long> evidenceFileIds) {}
 }
