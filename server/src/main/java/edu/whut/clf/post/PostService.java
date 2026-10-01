@@ -196,6 +196,18 @@ public class PostService {
         return p;
     }
 
+    // ---- V4：认领完成 → 寻物帖闭环链接（供 ClaimService 同一事务内调用）----
+
+    /** 申请人名下可关联的寻物帖候选池（本人 + LOST + ACTIVE）；类别/时间/排序由调用方处理。 */
+    public List<Post> activeLostByPublisher(Long publisherId) {
+        return postMapper.findActiveLostByPublisher(publisherId);
+    }
+
+    /** 事务内把寻物帖关联到 claim 并置 COMPLETED（含 closed_at）；返回受影响行数，0 表示并发冲突。 */
+    public int linkResolvedLost(Long lostPostId, Long claimId) {
+        return postMapper.resolveLost(lostPostId, claimId);
+    }
+
     // ---- 内部辅助 ----
 
     private boolean hasActiveClaim(Long postId) {

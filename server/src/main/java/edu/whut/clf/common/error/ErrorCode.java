@@ -42,6 +42,12 @@ public enum ErrorCode {
     CLAIM_ACCEPT_CONFLICT(HttpStatus.CONFLICT, "并发冲突，已有其他申请进入交接"),
     CLAIM_STATE_INVALID(HttpStatus.CONFLICT, "申请当前状态不允许该操作"),
 
+    // 认领完成 → 寻物帖闭环链接（V4）
+    CLAIM_NOT_COMPLETED(HttpStatus.CONFLICT, "认领尚未完成，不能关联寻物帖"),
+    RESOLVE_NOT_OWNER(HttpStatus.FORBIDDEN, "只能关联自己发布的寻物帖"),
+    RESOLVE_ALREADY_RESOLVED(HttpStatus.CONFLICT, "该寻物帖已被关联或已不可关联"),
+    RESOLVE_CATEGORY_MISMATCH(HttpStatus.BAD_REQUEST, "寻物帖与招领类别不一致"),
+
     // 交接
     HANDOVER_PAUSED_BY_DISPUTE(HttpStatus.CONFLICT, "存在未决争议，交接已暂停"),
     HANDOVER_NOT_PARTICIPANT(HttpStatus.FORBIDDEN, "非交接参与方"),

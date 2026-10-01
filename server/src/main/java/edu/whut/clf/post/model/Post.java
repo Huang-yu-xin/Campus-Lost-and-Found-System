@@ -20,6 +20,8 @@ public class Post {
     private LocalDateTime publishedAt;
     private String status;             // PostStatus
     private Integer version;
+    private Long resolvedByClaimId;    // V4：失主确认关联的 claim（招领侧），NULL=未关联
+    private LocalDateTime closedAt;    // V4：进入终态的时间；回到 ACTIVE 清 NULL
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

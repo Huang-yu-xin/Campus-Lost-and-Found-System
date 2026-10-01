@@ -55,4 +55,18 @@ public class ClaimController {
         claimService.cancelHandover(claimId, AuthContext.currentUserId(), reason);
         return ApiResponse.ok(null);
     }
+
+    @GetMapping("/{claimId}/resolved-candidates")
+    @Operation(summary = "认领完成后推荐可关联的寻物帖（V4 闭环）")
+    public ApiResponse<ResolvedCandidates> resolvedCandidates(@PathVariable Long claimId) {
+        return ApiResponse.ok(claimService.resolvedCandidates(claimId, AuthContext.currentUserId()));
+    }
+
+    @PostMapping("/{claimId}/resolve-lost")
+    @Operation(summary = "失主确认关联寻物帖并结束寻物（V4 闭环）")
+    public ApiResponse<Void> resolveLost(@PathVariable Long claimId, @RequestBody ResolveLostRequest req) {
+        claimService.resolveLost(claimId, AuthContext.currentUserId(),
+                req == null ? null : req.lostPostId());
+        return ApiResponse.ok(null);
+    }
 }

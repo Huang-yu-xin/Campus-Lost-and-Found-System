@@ -28,4 +28,14 @@ public class ClaimDtos {
 
     public record HandoverStatus(
             String claimStatus, boolean publisherConfirmed, boolean applicantConfirmed) {}
+
+    // ---- V4：认领完成 → 寻物帖闭环链接 ----
+
+    /** 推荐的可关联寻物帖候选。overlap = 标题+公开描述的 unigram Jaccard（保留两位）。 */
+    public record ResolvedCandidate(
+            Long id, String title, String campus, LocalDateTime eventTime, double overlap) {}
+
+    public record ResolvedCandidates(List<ResolvedCandidate> items) {}
+
+    public record ResolveLostRequest(Long lostPostId) {}
 }

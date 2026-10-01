@@ -108,6 +108,22 @@ public interface PostMapper {
     @Select("SELECT COUNT(*) FROM posts WHERE publisher_id = #{userId}")
     long countByPublisher(Long userId);
 
+    // ---- V4 认领完成关联寻物帖 ----
+    /** 申请人名下可被关联的寻物帖（候选池）：本人 + LOST + ACTIVE。类别/时间/排序在服务层处理。 */
+    @Select("SELECT * FROM posts WHERE publisher_id = #{publisherId} AND type = 'LOST' AND status = 'ACTIVE'")
+    List<Post> findActiveLostByPublisher(@Param("publisherId") Long publisherId);
+
+    /**
+     * 条件更新：仅当寻物帖仍为 ACTIVE 时，置 COMPLETED 并写入关联 claim 与 closed_at（并发安全）。
+     * 返回受影响行数（0 → 已被他人关联/状态已变，调用方按冲突处理）。
+     */
+    @Update("""
+            UPDATE posts
+               SET status = 'COMPLETED', resolved_by_claim_id = #{claimId}, closed_at = NOW(), version = version + 1
+             WHERE id = #{id} AND status = 'ACTIVE'
+            """)
+    int resolveLost(@Param("id") Long id, @Param("claimId") Long claimId);
+
     // ---- 匹配候选（相反类型、ACTIVE）(FR-MATCH-01) ----
     // P1：时间窗多臂候选。窗口与 T 子分的有效域一致（窗外候选 T=0，本就无价值）；
     // P4：同类目臂（category_code 相同、窗口更宽），覆盖"晚找回"场景；
