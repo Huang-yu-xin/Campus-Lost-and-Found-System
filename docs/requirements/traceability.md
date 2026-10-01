@@ -32,7 +32,7 @@
 | FR-SEARCH-01 | B | SRS§3-M4 | GET /posts/search | search | TC-SEARCH-01 | 🟢 |
 | FR-MATCH-01 | B | SRS§3-M4 | GET /posts/{id}/matches | match | TC-MATCH-01 | 🟢 |
 | FR-MATCH-02 | B | SRS§3-M4 | GET /posts/{id}/matches | match | TC-MATCH-01 | 🟢 |
-| FR-MATCH-03 | B | testing/test-plan(P4) | — | match | TC-MATCH-01 | 🟡 打分单测覆盖；正负样例报告待补 |
+| FR-MATCH-03 | B | testing/test-plan(P4) | — | match | MatchEvaluationHarnessIT + match-eval/报告 | 🟢 评估 harness+误配/漏配分析+调参依据（P7） |
 | FR-CLAIM-01 | C | SRS§3-M5, state-machines§2 | POST /posts/{id}/claims | claim | TC-CLAIM-01/02 | 🟢 |
 | FR-CLAIM-02 | C | SRS§3-M5 | /users/me/claims, /posts/{id}/claims | claim | — | 🟢 |
 | FR-CLAIM-03 | C | state-machines§2 | POST /claims/{id}/review | claim | — | 🟢 |

@@ -48,6 +48,9 @@ backups/
 *.dump
 *.sql.gz
 
+# ===== 压测生成数据（可用 tests/performance/gen_mock_data.py 重现，不入库） =====
+tests/performance/mock_data.sql
+
 # ===== 系统 =====
 .DS_Store
 Thumbs.db
