@@ -13,7 +13,8 @@ import static org.junit.jupiter.api.Assertions.*;
 class MatchScorerTest {
 
     private final CategoryDictionary dictionary = new CategoryDictionary();
-    private final MatchScorer scorer = new MatchScorer(new AppProperties.Match(), dictionary);
+    private final TextTokenizer tokenizer = new TextTokenizer();
+    private final MatchScorer scorer = new MatchScorer(new AppProperties.Match(), dictionary, tokenizer);
 
     private Post post(String type, String category, String campus, String location,
                       LocalDateTime eventTime, String title, String desc) {
@@ -124,6 +125,40 @@ class MatchScorerTest {
         assertEquals("campus-card", dictionary.codeFor("饭卡").orElse(null));
         // "图书馆" 不应因含"书"被映射到书本教材（裸单字不在别名表）
         assertTrue(dictionary.codeFor("图书馆").isEmpty());
+    }
+
+    // ---- P3 token 升级 / P6 地点门控 ----
+
+    @Test
+    void synonymCanonicalization_liftsRelatedItemOverlap() {
+        // 旧单字 Jaccard：水杯 vs 保温杯 = 1/4 = 0.25；规整后两者都变成"杯子" → 显著提升
+        double k = scorer.score(
+                post(PostType.LOST.name(), "水杯", "南湖校区", "图书馆", null, "丢失水杯", "蓝色水杯"),
+                post(PostType.FOUND.name(), "保温杯", "南湖校区", "图书馆", null, "捡到保温杯", "蓝色保温杯")
+        ).keyword();
+        assertTrue(k >= 0.5, "同义词规整后 K 应显著提升: " + k);
+    }
+
+    @Test
+    void stopwordOnlyOverlap_scoresNearZero() {
+        // 两段文本仅共享停用字（的/在/丢失/物品 等样板），实词完全不重合 → K ≈ 0
+        double k = scorer.score(
+                post(PostType.LOST.name(), "钥匙", "南湖校区", "操场", null, "丢失钥匙串", "在操场丢失的物品"),
+                post(PostType.FOUND.name(), "眼镜", "余家头校区", "教学楼", null, "捡到黑框眼镜", "描述详情请核验")
+        ).keyword();
+        assertTrue(k < 0.05, "停用字不应贡献关键词分: " + k);
+    }
+
+    @Test
+    void campusGate_reducesCrossCampusLocationScore() {
+        Post self = post(PostType.LOST.name(), "雨伞", "南湖校区", "图书馆", null, "雨伞", "");
+        Post sameCampus = post(PostType.FOUND.name(), "雨伞", "南湖校区", "图书馆", null, "雨伞", "");
+        Post otherCampus = post(PostType.FOUND.name(), "雨伞", "余家头校区", "图书馆", null, "雨伞", "");
+        double lSame = scorer.score(self, sameCampus).location();
+        double lCross = scorer.score(self, otherCampus).location();
+        // 同名楼：单字重合相同，但跨校区被门控乘 0.3
+        assertEquals(lSame * 0.3, lCross, 0.0001);
+        assertTrue(lCross < 0.35, "跨校区同名楼不应得到高地点分: " + lCross);
     }
 
     @Test

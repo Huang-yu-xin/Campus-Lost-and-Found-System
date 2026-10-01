@@ -39,7 +39,7 @@ class MatchServiceTest {
         imageMapper = mock(PostImageMapper.class);
         props = new AppProperties();
         service = new MatchService(postMapper, imageMapper,
-                new MatchScorer(props.getMatch(), new CategoryDictionary()), props);
+                new MatchScorer(props.getMatch(), new CategoryDictionary(), new TextTokenizer()), props);
     }
 
     private Post post(long id, String type, String category, String campus, String loc,

@@ -20,17 +20,20 @@ public class MatchScorer {
 
     private final AppProperties.Match cfg;
     private final CategoryDictionary dictionary;
+    private final TextTokenizer tokenizer;
 
     @Autowired
-    public MatchScorer(AppProperties props, CategoryDictionary dictionary) {
+    public MatchScorer(AppProperties props, CategoryDictionary dictionary, TextTokenizer tokenizer) {
         this.cfg = props.getMatch();
         this.dictionary = dictionary;
+        this.tokenizer = tokenizer;
     }
 
     /** 供测试用的显式构造。 */
-    public MatchScorer(AppProperties.Match cfg, CategoryDictionary dictionary) {
+    public MatchScorer(AppProperties.Match cfg, CategoryDictionary dictionary, TextTokenizer tokenizer) {
         this.cfg = cfg;
         this.dictionary = dictionary;
+        this.tokenizer = tokenizer;
     }
 
     public Result score(Post self, Post candidate) {
@@ -79,19 +82,32 @@ public class MatchScorer {
     }
 
     private double locationScore(Post a, Post b, List<String> reasons) {
-        Set<String> sa = tokens(join(a.getCampus(), a.getEventLocation()));
-        Set<String> sb = tokens(join(b.getCampus(), b.getEventLocation()));
+        // P6：校区作为门控因子——同校区满分通行，不同校区降权，缺失取中性 0.5；
+        // 楼宇重合度只比较 eventLocation（校区不再混入 token），避免跨校区同名楼虚高。
+        String ca = blankToNull(a.getCampus());
+        String cb = blankToNull(b.getCampus());
+        double gate;
+        if (ca != null && cb != null) {
+            gate = ca.equals(cb) ? 1.0 : cfg.getCampusMismatchFactor();
+            reasons.add(gate == 1.0 ? "同校区：" + ca : "不同校区（地点分×" + pct(gate) + "）");
+        } else {
+            gate = 0.5;
+            reasons.add("校区信息缺失（地点门控取 0.5）");
+        }
+        Set<String> sa = tokenizer.unigrams(a.getEventLocation());
+        Set<String> sb = tokenizer.unigrams(b.getEventLocation());
         if (sa.isEmpty() || sb.isEmpty()) {
             reasons.add("地点信息缺失，未计入地点分");
             return 0;
         }
         double j = jaccard(sa, sb);
+        double score = round(j * gate);
         if (j > 0) {
-            reasons.add("地点相近度 " + pct(j));
+            reasons.add("地点相近度 " + pct(j) + " → 计 " + pct(score));
         } else {
             reasons.add("地点无重合");
         }
-        return j;
+        return score;
     }
 
     private double timeScore(Post self, Post candidate, List<String> reasons) {
@@ -120,49 +136,35 @@ public class MatchScorer {
     }
 
     private double keywordScore(Post a, Post b, List<String> reasons) {
-        Set<String> sa = tokens(join(a.getTitle(), a.getPublicDescription()));
-        Set<String> sb = tokens(join(b.getTitle(), b.getPublicDescription()));
-        if (sa.isEmpty() || sb.isEmpty()) {
+        // P3：K = wUni·J(单字去停用) + wBi·J(相邻二字)；同义词在 token 化前已规整。
+        String ta = join(a.getTitle(), a.getPublicDescription());
+        String tb = join(b.getTitle(), b.getPublicDescription());
+        Set<String> uniA = tokenizer.unigrams(ta);
+        Set<String> uniB = tokenizer.unigrams(tb);
+        Set<String> biA = tokenizer.bigrams(ta);
+        Set<String> biB = tokenizer.bigrams(tb);
+        if ((uniA.isEmpty() && biA.isEmpty()) || (uniB.isEmpty() && biB.isEmpty())) {
             reasons.add("文本信息不足，未计入关键词分");
             return 0;
         }
-        double j = jaccard(sa, sb);
-        if (j > 0) {
-            reasons.add("关键词重合度 " + pct(j));
+        double ju = jaccard(uniA, uniB);
+        double jb = jaccard(biA, biB);
+        double k = round(cfg.getWUnigram() * ju + cfg.getWBigram() * jb);
+        if (k > 0) {
+            reasons.add("关键词重合 " + pct(k) + "（单字 " + pct(ju) + " / 词组 " + pct(jb) + "）");
+        } else {
+            reasons.add("关键词无重合");
         }
-        return j;
+        return k;
     }
 
-    // ---- 文本工具：ASCII 词 + CJK 单字，去重成集合 ----
-    static Set<String> tokens(String text) {
-        Set<String> set = new HashSet<>();
-        if (text == null) {
-            return set;
-        }
-        String lower = text.toLowerCase();
-        StringBuilder ascii = new StringBuilder();
-        for (int i = 0; i < lower.length(); i++) {
-            char ch = lower.charAt(i);
-            if (ch >= '0' && ch <= '9' || ch >= 'a' && ch <= 'z') {
-                ascii.append(ch);
-            } else {
-                if (ascii.length() > 0) {
-                    set.add(ascii.toString());
-                    ascii.setLength(0);
-                }
-                if (isCjk(ch)) {
-                    set.add(String.valueOf(ch));
-                }
-            }
-        }
-        if (ascii.length() > 0) {
-            set.add(ascii.toString());
-        }
-        return set;
+    // ---- 文本工具 ----
+    private static String blankToNull(String s) {
+        return s == null || s.isBlank() ? null : s;
     }
 
-    private static boolean isCjk(char ch) {
-        return ch >= '一' && ch <= '鿿';
+    private static String join(String a, String b) {
+        return (a == null ? "" : a) + " " + (b == null ? "" : b);
     }
 
     static double jaccard(Set<String> a, Set<String> b) {
@@ -174,10 +176,6 @@ public class MatchScorer {
         Set<String> union = new HashSet<>(a);
         union.addAll(b);
         return (double) inter.size() / union.size();
-    }
-
-    private static String join(String a, String b) {
-        return (a == null ? "" : a) + " " + (b == null ? "" : b);
     }
 
     private static double round(double v) {

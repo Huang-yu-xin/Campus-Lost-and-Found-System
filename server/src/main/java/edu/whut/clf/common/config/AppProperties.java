@@ -75,5 +75,10 @@ public class AppProperties {
         private double sameParentScore = 0.5;
         /** 同类目臂的窗口（天）：比时间窗更宽，覆盖晚找回场景。 */
         private int categoryWindowDays = 90;
+        /** P3：K 子分中 unigram 与 bigram 两个 Jaccard 的权重。 */
+        private double wUnigram = 0.5;
+        private double wBigram = 0.5;
+        /** P6：校区门控——两边校区都填但不同时的地点分乘数。 */
+        private double campusMismatchFactor = 0.3;
     }
 }
