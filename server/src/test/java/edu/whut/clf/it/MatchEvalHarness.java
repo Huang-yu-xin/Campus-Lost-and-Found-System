@@ -26,6 +26,10 @@ import java.util.*;
  * 指标：候选阶段召回（阈值前）、Hit@1/5/10/20、MRR、正/难负/随机负的分数分布、τ 处保留率与误报率。
  * <p>
  * 边界：只使用发布公开字段与完成事实，不读取任何认领证明；分数全部由生产 MatchScorer 计算。
+ * <p>点时重建：本合成集的帖子全程保持 ACTIVE，直接用生产 candidatesFor 即为"彼时"候选，无需重建。
+ * 对真实事实链接对的点时重建见 {@link MatchRealPairsIT}——closed_at 自 V4 起可用，候选池用
+ * {@code published_at <= t AND (closed_at IS NULL OR closed_at >= t)} 还原，取代旧的
+ * {@code status != 'REMOVED'} 近似。
  */
 public class MatchEvalHarness {
 
