@@ -123,6 +123,16 @@ paths:
       tags: [M6-Lead]
       summary: 我提交的线索（FR-LEAD-02）
       responses: { '200': { description: 分页列表 } }
+  /users/me/received-claims:
+    get:
+      tags: [M5-Claim]
+      summary: 我作为发布者收到的申请（FR-CLAIM-02）
+      responses: { '200': { description: 分页列表（含 postTitle） } }
+  /users/me/received-leads:
+    get:
+      tags: [M6-Lead]
+      summary: 我作为寻物发布者收到的线索（FR-LEAD-02）
+      responses: { '200': { description: 分页列表 } }
 
   # ---------------- M3 文件与发布 ----------------
   /files:
@@ -242,9 +252,11 @@ paths:
     post:
       tags: [M5-Claim]
       summary: 对 FOUND 发起认领（FR-CLAIM-01）
+      description: >
+        幂等策略（裁决 R1）：重复提交由 DB 唯一约束 uk_claim_active_applicant + 状态条件更新保障，
+        **未启用 Idempotency-Key 请求头**；idempotency_records 表为预留，当前未引用。
       parameters:
         - { name: postId, in: path, required: true, schema: { type: string } }
-        - { name: Idempotency-Key, in: header, schema: { type: string } }
       requestBody:
         required: true
         content:
@@ -253,7 +265,7 @@ paths:
       responses:
         '201': { description: 创建成功 }
         '403': { description: SELF_CLAIM_FORBIDDEN }
-        '409': { description: POST_NOT_CLAIMABLE / ACTIVE_CLAIM_EXISTS }
+        '409': { description: POST_NOT_CLAIMABLE / ACTIVE_CLAIM_EXISTS（重复认领兜底） }
   /claims/{claimId}:
     get:
       tags: [M5-Claim]
@@ -306,7 +318,48 @@ paths:
       tags: [M5-Claim]
       summary: 受控取消交接（FR-CLAIM-05）
       parameters: [ { name: claimId, in: path, required: true, schema: { type: string } } ]
-      responses: { '200': { description: OK } }
+      responses:
+        '200': { description: OK }
+        '404': { description: 非参与方亦 404（防枚举，裁决 R3） }
+        '409': { description: CLAIM_STATE_INVALID / HANDOVER_PAUSED_BY_DISPUTE（OPEN 争议冻结） }
+
+  # ---------------- V4 认领完成 → 寻物帖闭环链接（FR-POST-06） ----------------
+  /claims/{claimId}/resolved-candidates:
+    get:
+      tags: [M5-Claim]
+      summary: 认领完成后推荐可关联的寻物帖候选（FR-POST-06）
+      description: >
+        仅已完成（COMPLETED）认领的申请人可见；候选为申请人名下 LOST+ACTIVE 且类别/时间合理的帖，
+        按标题+公开描述的 unigram Jaccard 降序取前 3。非申请人一律 404（防枚举）。
+      parameters: [ { name: claimId, in: path, required: true, schema: { type: string } } ]
+      responses:
+        '200':
+          description: 候选列表
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ResolvedCandidates' }
+        '404': { description: CLAIM_NOT_FOUND（含非申请人防枚举） }
+        '409': { description: CLAIM_NOT_COMPLETED }
+  /claims/{claimId}/resolve-lost:
+    post:
+      tags: [M5-Claim]
+      summary: 失主确认将寻物帖关联为"已找回"（FR-POST-06）
+      description: >
+        把申请人名下的一条 LOST 帖闭环为 COMPLETED 并回填 resolved_by_claim_id。
+        校验顺序即防枚举：参与方 → claim 完成 → 只能关联 LOST 帖 → 帖子归属 → 幂等/冲突 → 类别一致。
+        一个 claim 只能关联一条寻物帖（裁决 R4）。
+      parameters: [ { name: claimId, in: path, required: true, schema: { type: string } } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ResolveLostRequest' }
+      responses:
+        '200': { description: OK（已关联或幂等重复） }
+        '400': { description: INVALID_ARGUMENT（lostPostId 缺失/非 LOST 帖）/ RESOLVE_CATEGORY_MISMATCH }
+        '403': { description: RESOLVE_NOT_OWNER }
+        '404': { description: CLAIM_NOT_FOUND（含非申请人防枚举）/ POST_NOT_FOUND }
+        '409': { description: CLAIM_NOT_COMPLETED / RESOLVE_ALREADY_RESOLVED }
 
   # ---------------- M6 沟通/线索/争议 ----------------
   /claims/{claimId}/messages:
@@ -331,12 +384,20 @@ paths:
       summary: 对 LOST 提交线索（FR-LEAD-01）
       parameters: [ { name: postId, in: path, required: true, schema: { type: string } } ]
       responses: { '201': { description: OK } }
+  /leads/{leadId}:
+    get:
+      tags: [M6-Lead]
+      summary: 查看单条线索（线索提交者或寻物发布者，否则 404）
+      parameters: [ { name: leadId, in: path, required: true, schema: { type: string } } ]
+      responses: { '200': { description: OK }, '404': { description: 无权限亦 404 } }
   /leads/{leadId}/review:
     post:
       tags: [M6-Lead]
       summary: 寻物发布者处理线索（FR-LEAD-02）
       parameters: [ { name: leadId, in: path, required: true, schema: { type: string } } ]
-      responses: { '200': { description: OK } }
+      responses:
+        '200': { description: OK }
+        '409': { description: 非法状态转移（裁决 R8 白名单） }
   /claims/{claimId}/disputes:
     get:
       tags: [M6-Dispute]
@@ -386,6 +447,14 @@ paths:
       summary: 受限查看争议（FR-DISPUTE-02）
       parameters: [ { name: disputeId, in: path, required: true, schema: { type: string } } ]
       responses: { '200': { description: OK } }
+  /admin/disputes/{disputeId}/assign:
+    post:
+      tags: [M2-Admin]
+      summary: 受理争议（受理后方可读取受限证据，FR-DISPUTE-02）
+      parameters: [ { name: disputeId, in: path, required: true, schema: { type: string } } ]
+      responses:
+        '200': { description: OK }
+        '409': { description: DISPUTE_NOT_OPEN }
   /admin/disputes/{disputeId}/resolution:
     post:
       tags: [M2-Admin]
@@ -428,10 +497,10 @@ components:
       properties:
         type: { type: string, enum: [LOST, FOUND] }
         title: { type: string, maxLength: 128 }
-        category: { type: string }
-        publicDescription: { type: string }
-        campus: { type: string, nullable: true }
-        eventLocation: { type: string, nullable: true }
+        category: { type: string, maxLength: 48 }
+        publicDescription: { type: string, maxLength: 2000 }
+        campus: { type: string, nullable: true, maxLength: 64 }
+        eventLocation: { type: string, nullable: true, maxLength: 128 }
         eventTime: { type: string, format: date-time, nullable: true }
         imageFileIds:
           type: array
@@ -453,3 +522,23 @@ components:
           type: array
           items: { type: string }
         preview: { type: object }
+    # ---- V4 认领完成 → 寻物帖闭环链接（FR-POST-06）----
+    ResolvedCandidate:
+      type: object
+      properties:
+        id: { type: string }
+        title: { type: string }
+        campus: { type: string, nullable: true }
+        eventTime: { type: string, format: date-time, nullable: true }
+        overlap: { type: number, format: double, description: 标题+公开描述 unigram Jaccard（保留两位） }
+    ResolvedCandidates:
+      type: object
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/ResolvedCandidate' }
+    ResolveLostRequest:
+      type: object
+      required: [lostPostId]
+      properties:
+        lostPostId: { type: string, description: 申请人名下待闭环的 LOST 帖 id }
