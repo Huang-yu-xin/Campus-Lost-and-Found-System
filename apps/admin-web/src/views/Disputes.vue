@@ -3,13 +3,13 @@
     <h3>争议处理</h3>
     <el-form :inline="true">
       <el-form-item label="状态">
-        <el-select v-model="status" clearable placeholder="全部" style="width:140px" @change="load">
+        <el-select v-model="status" clearable placeholder="全部" style="width:140px" @change="reload">
           <el-option label="OPEN" value="OPEN" />
           <el-option label="RESOLVED" value="RESOLVED" />
           <el-option label="CLOSED" value="CLOSED" />
         </el-select>
       </el-form-item>
-      <el-button @click="load">刷新</el-button>
+      <el-button @click="reload">刷新</el-button>
     </el-form>
 
     <el-table :data="items" v-loading="loading" border>
@@ -24,6 +24,8 @@
         </template>
       </el-table-column>
     </el-table>
+    <el-pagination style="margin-top:10px" layout="prev, pager, next, total" :total="total"
+      :page-size="pageSize" :current-page="page" @current-change="onPage" />
 
     <el-dialog v-model="dialog" title="争议详情与裁决" width="620px">
       <div v-if="current">
@@ -83,6 +85,9 @@ const current = ref(null)
 const resolutionType = ref('CONTINUE')
 const note = ref('')
 const viewerUrl = ref('')
+const page = ref(1)
+const total = ref(0)
+const pageSize = 20
 
 const assigned = computed(() => current.value && current.value.assignedAdminId != null)
 const previewText = computed(() => ({
@@ -94,10 +99,13 @@ const previewText = computed(() => ({
 async function load() {
   loading.value = true
   try {
-    const data = await adminApi.listDisputes({ status: status.value, page: 1, pageSize: 50 })
+    const data = await adminApi.listDisputes({ status: status.value, page: page.value, pageSize })
     items.value = data.items || []
+    total.value = data.total || 0
   } catch (e) { ElMessage.error(e?.message || '加载失败') } finally { loading.value = false }
 }
+function reload() { page.value = 1; load() }
+function onPage(p) { page.value = p; load() }
 async function openDetail(id) {
   current.value = await adminApi.getDispute(id)
   resolutionType.value = 'CONTINUE'; note.value = ''

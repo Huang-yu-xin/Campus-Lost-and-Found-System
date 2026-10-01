@@ -34,10 +34,19 @@ export function request(options) {
       },
       success: (res) => {
         const body = res.data || {}
-        if (res.statusCode === 401) {
+        const sc = res.statusCode
+        if (sc === 401) {
           clearToken()
           uni.showToast({ title: '请先登录', icon: 'none' })
-          reject({ code: 'UNAUTHENTICATED', message: '未登录' })
+          reject({ code: 'UNAUTHENTICATED', statusCode: sc, message: '未登录' })
+          return
+        }
+        // P1-F1：先校验 HTTP 状态码，非 2xx 一律 reject（携带 statusCode 与 body 摘要），
+        // 不再因缺少 body.code 而静默 resolve(undefined)（如 5xx 网关返回非业务 JSON）
+        if (sc < 200 || sc >= 300) {
+          const msg = body.message || ('请求失败(' + sc + ')')
+          uni.showToast({ title: msg, icon: 'none' })
+          reject({ code: body.code || ('HTTP_' + sc), statusCode: sc, message: msg })
           return
         }
         if (body.code && body.code !== 'OK') {

@@ -19,6 +19,11 @@
       <button class="btn danger" @click="review('CLOSED')">关闭线索</button>
     </view>
   </view>
+  <!-- P1-F2：加载失败错误态 + 重试 -->
+  <view class="page errstate" v-else-if="error">
+    <text class="errmsg">加载失败，请稍后重试</text>
+    <button class="btn primary" @click="load">重试</button>
+  </view>
 </template>
 
 <script>
@@ -27,7 +32,7 @@ import { leadStatusLabel } from '../../utils/labels'
 
 export default {
   data() {
-    return { leadId: null, owner: false, lead: null, eviImgs: [] }
+    return { leadId: null, owner: false, lead: null, eviImgs: [], error: false }
   },
   onLoad(query) {
     this.leadId = query.leadId
@@ -37,7 +42,17 @@ export default {
   methods: {
     leadStatusLabel,
     async load() {
-      this.lead = await leadApi.detail(this.leadId)
+      this.error = false
+      try {
+        this.lead = await leadApi.detail(this.leadId)
+      } catch (e) {
+        this.lead = null
+        this.error = true
+        if (e && (e.statusCode === 401 || e.code === 'UNAUTHENTICATED')) {
+          uni.navigateTo({ url: '/pages/login/login' })
+        }
+        return
+      }
       this.eviImgs = []
       for (const fid of (this.lead.evidenceFileIds || [])) {
         try { this.eviImgs.push(await loadPrivateImage(fid)) } catch (e) { /* skip */ }
@@ -65,4 +80,6 @@ export default {
 .mtitle { font-weight: 600; margin-bottom: 14rpx; }
 .btn { margin-bottom: 12rpx; } .btn.primary { background: #2b6cb0; color: #fff; }
 .btn.danger { background: #f56c6c; color: #fff; }
+.errstate { padding-top: 160rpx; text-align: center; }
+.errmsg { display: block; color: #909399; font-size: 28rpx; margin-bottom: 30rpx; }
 </style>

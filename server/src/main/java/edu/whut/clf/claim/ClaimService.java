@@ -114,10 +114,11 @@ public class ClaimService {
         boolean applicantConfirmed = handoverMapper.exists(claimId, claim.getApplicantId()) > 0;
         boolean publisherConfirmed = handoverMapper.exists(claimId, post.getPublisherId()) > 0;
         List<Long> evidence = isApplicant || isPublisher ? evidenceMapper.findFileIds(claimId) : List.of();
+        Long resolvedLostPostId = postService.resolvedLostPostIdByClaim(claimId); // B7/R4 持久态
         return new ClaimDetail(claim.getId(), claim.getPostId(), claim.getApplicantId(), claim.getDescription(),
                 claim.getStatus(), claim.getReviewReason(), claim.getReviewedAt(), claim.getAcceptedAt(),
                 claim.getCompletedAt(), post.getPublisherId(), isApplicant, isPublisher,
-                applicantConfirmed, publisherConfirmed, evidence);
+                applicantConfirmed, publisherConfirmed, resolvedLostPostId, evidence);
     }
 
     public PageResult<ClaimSummary> myClaims(Long userId, int page, int pageSize) {
@@ -308,6 +309,11 @@ public class ClaimService {
         requireClaimCompleted(claim);                                  // 2. claim 完成
         if (lostPostId == null) {
             throw new BusinessException(ErrorCode.INVALID_ARGUMENT, "lostPostId 必填");
+        }
+        // R4：一个 claim 只能关联一条寻物帖——若本 claim 已关联其他帖，则 409（关联同一帖走后续幂等分支）
+        Long alreadyLinked = postService.resolvedLostPostIdByClaim(claimId);
+        if (alreadyLinked != null && !alreadyLinked.equals(lostPostId)) {
+            throw BusinessException.of(ErrorCode.RESOLVE_ALREADY_RESOLVED);
         }
         Post found = postService.getById(claim.getPostId());
         Post lost = postService.getById(lostPostId);

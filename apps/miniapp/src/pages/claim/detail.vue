@@ -113,6 +113,11 @@
       </view>
     </view>
   </view>
+  <!-- P1-F2：加载失败错误态 + 重试 -->
+  <view class="page errstate" v-else-if="error">
+    <text class="errmsg">加载失败，请稍后重试</text>
+    <button class="btn primary" @click="reloadAll">重试</button>
+  </view>
 </template>
 
 <script>
@@ -122,7 +127,7 @@ import { claimStatusLabel } from '../../utils/labels'
 export default {
   data() {
     return {
-      claimId: null, claim: null, messages: [], disputes: [], eviImgs: [], msgText: '',
+      claimId: null, claim: null, error: false, messages: [], disputes: [], eviImgs: [], msgText: '',
       showDisputeForm: false, disputeReason: '', disputeImgs: [], submittingDispute: false,
       // V4 闭环：关联寻物帖
       candidates: [], resolvedDone: false, showManual: false, manualPosts: [], resolving: false
@@ -138,7 +143,8 @@ export default {
   methods: {
     claimStatusLabel,
     async reloadAll() {
-      await this.load()
+      const ok = await this.load()
+      if (!ok) return
       this.loadMessages()
       this.loadDisputes()
       this.loadEvidence()
@@ -174,7 +180,22 @@ export default {
         await this.load()
       } catch (e) { /* toasted by request.js */ } finally { this.resolving = false }
     },
-    async load() { this.claim = await claimApi.detail(this.claimId) },
+    async load() {
+      this.error = false
+      try {
+        this.claim = await claimApi.detail(this.claimId)
+        // B7/R4：从后端持久字段恢复"已关联"态，重进页面仍保持
+        this.resolvedDone = !!(this.claim && this.claim.resolvedLostPostId)
+        return true
+      } catch (e) {
+        this.claim = null
+        this.error = true
+        if (e && (e.statusCode === 401 || e.code === 'UNAUTHENTICATED')) {
+          uni.navigateTo({ url: '/pages/login/login' })
+        }
+        return false
+      }
+    },
     async loadMessages() { try { this.messages = await claimApi.messages(this.claimId) } catch (e) { /* */ } },
     async loadDisputes() { try { this.disputes = await claimApi.disputes(this.claimId) } catch (e) { this.disputes = [] } },
     async loadEvidence() {
@@ -284,4 +305,6 @@ export default {
 .cand-main { flex: 1; margin-right: 12rpx; }
 .cand-title { font-size: 26rpx; font-weight: 600; }
 .cand-empty { margin-top: 12rpx; }
+.errstate { padding-top: 160rpx; text-align: center; }
+.errmsg { display: block; color: #909399; font-size: 28rpx; margin-bottom: 30rpx; }
 </style>

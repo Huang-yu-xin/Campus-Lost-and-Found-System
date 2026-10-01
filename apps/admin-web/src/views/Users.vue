@@ -3,9 +3,9 @@
     <h3>用户治理</h3>
     <el-form :inline="true">
       <el-form-item label="昵称">
-        <el-input v-model="keyword" clearable placeholder="搜索昵称" @keyup.enter="load" />
+        <el-input v-model="keyword" clearable placeholder="搜索昵称" @keyup.enter="reload" />
       </el-form-item>
-      <el-button @click="load">搜索</el-button>
+      <el-button @click="reload">搜索</el-button>
     </el-form>
 
     <el-table :data="items" v-loading="loading" border>
@@ -21,6 +21,8 @@
         </template>
       </el-table-column>
     </el-table>
+    <el-pagination style="margin-top:10px" layout="prev, pager, next, total" :total="total"
+      :page-size="pageSize" :current-page="page" @current-change="onPage" />
   </div>
 </template>
 
@@ -32,14 +34,20 @@ import { adminApi } from '../api'
 const items = ref([])
 const loading = ref(false)
 const keyword = ref('')
+const page = ref(1)
+const total = ref(0)
+const pageSize = 20
 
 async function load() {
   loading.value = true
   try {
-    const data = await adminApi.listUsers({ keyword: keyword.value, page: 1, pageSize: 50 })
+    const data = await adminApi.listUsers({ keyword: keyword.value, page: page.value, pageSize })
     items.value = data.items || []
+    total.value = data.total || 0
   } catch (e) { ElMessage.error(e?.message || '加载失败') } finally { loading.value = false }
 }
+function reload() { page.value = 1; load() }
+function onPage(p) { page.value = p; load() }
 async function restrict(row) {
   const { value } = await ElMessageBox.prompt('限制理由', '限制用户', { inputValidator: (v) => !!v || '请填写理由' })
   await adminApi.restrictUser(row.id, value)

@@ -113,6 +113,10 @@ public interface PostMapper {
     @Select("SELECT * FROM posts WHERE publisher_id = #{publisherId} AND type = 'LOST' AND status = 'ACTIVE'")
     List<Post> findActiveLostByPublisher(@Param("publisherId") Long publisherId);
 
+    /** 返回被指定 claim 关联的寻物帖 id（B7/R4：一 claim 至多一条）；无则 null。 */
+    @Select("SELECT id FROM posts WHERE resolved_by_claim_id = #{claimId} LIMIT 1")
+    Long findResolvedPostIdByClaim(@Param("claimId") Long claimId);
+
     /**
      * 条件更新：仅当寻物帖仍为 ACTIVE 时，置 COMPLETED 并写入关联 claim 与 closed_at（并发安全）。
      * 返回受影响行数（0 → 已被他人关联/状态已变，调用方按冲突处理）。

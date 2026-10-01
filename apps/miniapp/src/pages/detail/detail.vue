@@ -64,6 +64,11 @@
       </view>
     </view>
   </view>
+  <!-- P1-F2：加载失败错误态 + 重试 -->
+  <view class="page errstate" v-else-if="error">
+    <text class="errmsg">加载失败，请稍后重试</text>
+    <button class="btn primary" @click="load">重试</button>
+  </view>
 </template>
 
 <script>
@@ -74,7 +79,7 @@ import { postStatusLabel, typeLabel } from '../../utils/labels'
 export default {
   data() {
     return {
-      id: null, post: null, matches: [],
+      id: null, post: null, matches: [], error: false,
       showClaimForm: false, claimDesc: '', claimImgs: [],
       showLeadForm: false, leadBody: '', leadImgs: [],
       submitting: false
@@ -88,7 +93,16 @@ export default {
     postStatusLabel, typeLabel,
     imgUrl: (fid) => fileUrl(fid),
     async load() {
-      this.post = await postApi.detail(this.id)
+      this.error = false
+      try {
+        this.post = await postApi.detail(this.id)
+      } catch (e) {
+        this.post = null
+        this.error = true
+        if (e && (e.statusCode === 401 || e.code === 'UNAUTHENTICATED')) {
+          uni.navigateTo({ url: '/pages/login/login' })
+        }
+      }
     },
     requireLogin() {
       if (!getToken()) { uni.navigateTo({ url: '/pages/login/login' }); return false }
@@ -131,6 +145,13 @@ export default {
       if (!this.matches.length) uni.showToast({ title: '暂无匹配候选', icon: 'none' })
     },
     async markFound() {
+      // P1-F4：标记已找回不可逆，二次确认
+      const r = await new Promise((res) => uni.showModal({
+        title: '确认标记已找回？',
+        content: '标记后该寻物信息将关闭，无法撤销。',
+        success: res
+      }))
+      if (!r.confirm) return
       await postApi.markFound(this.id)
       uni.showToast({ title: '已标记找回', icon: 'success' })
       this.load()
@@ -170,4 +191,6 @@ export default {
 .mitem { border-top: 1rpx solid #f0f0f0; padding: 16rpx 0; }
 .score { color: #67c23a; margin-left: 14rpx; }
 .reasons { color: #909399; font-size: 22rpx; margin-top: 8rpx; }
+.errstate { padding-top: 160rpx; text-align: center; }
+.errmsg { display: block; color: #909399; font-size: 28rpx; margin-bottom: 30rpx; }
 </style>

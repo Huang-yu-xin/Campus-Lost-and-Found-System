@@ -30,8 +30,9 @@ public class UserService {
         if (req.nickname() != null && !req.nickname().isBlank()) {
             u.setNickname(req.nickname().trim());
         }
-        if (req.campus() != null) {
-            u.setCampus(req.campus());
+        // B3(P1-F3)：campus 为空白视为"不更新"（与前端不下发空键同口径），避免静默清空
+        if (req.campus() != null && !req.campus().isBlank()) {
+            u.setCampus(req.campus().trim());
         }
         if (req.avatarFileId() != null) {
             // A6(P1-B5)：头像必须是本人上传的文件（复用 PUBLIC_POST 用途，不新增枚举），

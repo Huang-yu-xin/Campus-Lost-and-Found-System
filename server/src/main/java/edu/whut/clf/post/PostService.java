@@ -208,6 +208,11 @@ public class PostService {
         return postMapper.resolveLost(lostPostId, claimId);
     }
 
+    /** 被指定 claim 关联的寻物帖 id（B7/R4），无则 null。 */
+    public Long resolvedLostPostIdByClaim(Long claimId) {
+        return postMapper.findResolvedPostIdByClaim(claimId);
+    }
+
     // ---- 内部辅助 ----
 
     private boolean hasActiveClaim(Long postId) {

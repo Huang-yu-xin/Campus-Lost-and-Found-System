@@ -109,7 +109,9 @@ export default {
             success: async (r2) => {
               if (!r2.confirm) return
               const payload = { nickname }
-              payload.campus = (r2.content || '').trim()
+              // B3(P1-F3)：校区留空则不下发 campus 键，避免把已有校区静默清空
+              const campus = (r2.content || '').trim()
+              if (campus) payload.campus = campus
               await userApi.update(payload)
               uni.showToast({ title: '已保存', icon: 'success' })
               this.loadMe()

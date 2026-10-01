@@ -25,6 +25,7 @@ public class ClaimDtos {
             String reviewReason, LocalDateTime reviewedAt, LocalDateTime acceptedAt, LocalDateTime completedAt,
             Long publisherId, boolean applicant, boolean publisher,
             boolean applicantConfirmed, boolean publisherConfirmed,
+            Long resolvedLostPostId,   // B7/R4：本次认领已闭环关联的寻物帖 id（可空），用于前端持久化"已关联"态
             List<Long> evidenceFileIds) {}
 
     public record HandoverStatus(
