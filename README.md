@@ -164,7 +164,6 @@ BASE=http://localhost:8080/api/v1 ADMIN_USER="$ADMIN_BOOTSTRAP_USERNAME" ADMIN_P
 | [OpenAPI 契约](docs/api/openapi.yaml) · [错误码约定](docs/api/conventions.md) | 接口 |
 | [部署](docs/operations/deployment.md) · [备份恢复](docs/operations/backup-restore.md) | 运维 |
 | [演示脚本](docs/demo/demo-script.md) · [测试报告](docs/testing/test-report.md) | 演示 / 测试 |
-| [阶段报告](docs/reports/) · [风险与决策](docs/risks-and-decisions.md) | 过程与决策 |
 
 ---
 

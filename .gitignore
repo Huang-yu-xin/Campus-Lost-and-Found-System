@@ -60,3 +60,10 @@ campus-lost-and-found/
 
 # 本地任务书，不发布到远端
 /taskbooks/
+
+# ===== 开发过程文档（阶段报告、独立审计、评测原始记录、内部计划等；仅团队本地留存，不发布到远端） =====
+docs/reports/P*-report.md
+docs/reports/independent-audit-*.md
+docs/AGENT_IMPLEMENTATION_PLAN.md
+docs/risks-and-decisions.md
+docs/testing/match-eval/report-*.md
